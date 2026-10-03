@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as adminAccess from "../adminAccess.js";
 import type * as cart from "../cart.js";
 import type * as categories from "../categories.js";
 import type * as files from "../files.js";
@@ -31,6 +32,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  adminAccess: typeof adminAccess;
   cart: typeof cart;
   categories: typeof categories;
   files: typeof files;

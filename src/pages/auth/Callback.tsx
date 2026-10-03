@@ -1,19 +1,40 @@
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuthCallback } from "@usehercules/auth/react";
+import { useAuth, useAuthCallback } from "@usehercules/auth/react";
 import { useConvexAuth, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import { Button } from "@/components/ui/button.tsx";
+import { toast } from "sonner";
+import {
+  getAdminDisplayName,
+  isAuthorizedAdminEmail,
+} from "@/convex/adminAccess.ts";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const { user, signout } = useAuth();
   const { isAuthenticated: isConvexAuthenticated } = useConvexAuth();
   const updateCurrentUser = useMutation(api.users.updateCurrentUser);
 
   const onSync = useCallback(async () => {
+    const email = user?.profile?.email as string | undefined;
+
+    if (!isAuthorizedAdminEmail(email)) {
+      toast.error("Access denied", {
+        description: "This email is not authorized to access this site.",
+      });
+      await signout();
+      throw new Error("This email is not authorized to access this site.");
+    }
+
     await updateCurrentUser();
-  }, [updateCurrentUser]);
+
+    const adminName = getAdminDisplayName(email);
+    if (adminName) {
+      toast.success(`Welcome, Admin ${adminName}`);
+    }
+  }, [signout, updateCurrentUser, user]);
 
   const navigateHome = useCallback(
     () => navigate("/", { replace: true }),

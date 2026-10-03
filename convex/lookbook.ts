@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
+import { isAuthorizedAdminUser } from "./adminAccess";
 
 async function requireAdmin(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -9,7 +10,7 @@ async function requireAdmin(ctx: MutationCtx) {
     .query("users")
     .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
     .unique();
-  if (!user || user.role !== "admin") throw new ConvexError({ code: "FORBIDDEN", message: "Admin only" });
+  if (!isAuthorizedAdminUser(user, identity.email)) throw new ConvexError({ code: "FORBIDDEN", message: "Admin only" });
   return user;
 }
 
@@ -22,7 +23,7 @@ export const listAll = query({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") return [];
+    if (!isAuthorizedAdminUser(user, identity.email)) return [];
     return await ctx.db.query("lookbookVideos").order("asc").collect();
   },
 });

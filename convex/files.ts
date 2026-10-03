@@ -1,5 +1,6 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { isAuthorizedAdminUser } from "./adminAccess";
 
 // Generate a signed upload URL for Convex File Storage
 export const generateUploadUrl = mutation({
@@ -11,7 +12,7 @@ export const generateUploadUrl = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") throw new Error("Forbidden");
+    if (!isAuthorizedAdminUser(user, identity.email)) throw new Error("Forbidden");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -26,7 +27,7 @@ export const generateVideoUploadUrl = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") throw new Error("Forbidden");
+    if (!isAuthorizedAdminUser(user, identity.email)) throw new Error("Forbidden");
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -41,7 +42,7 @@ export const getStorageUrl = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") throw new Error("Forbidden");
+    if (!isAuthorizedAdminUser(user, identity.email)) throw new Error("Forbidden");
     return await ctx.storage.getUrl(args.storageId);
   },
 });
@@ -56,7 +57,7 @@ export const deleteStorageFile = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") throw new Error("Forbidden");
+    if (!isAuthorizedAdminUser(user, identity.email)) throw new Error("Forbidden");
     await ctx.storage.delete(args.storageId);
   },
 });

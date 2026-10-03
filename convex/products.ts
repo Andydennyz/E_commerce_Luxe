@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
+import { isAuthorizedAdminUser } from "./adminAccess";
 
 export const list = query({
   args: {
@@ -127,7 +128,7 @@ export const create = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") throw new Error("Forbidden");
+    if (!isAuthorizedAdminUser(user, identity.email)) throw new Error("Forbidden");
     return await ctx.db.insert("products", { ...args, rating: 0, reviewCount: 0 });
   },
 });
@@ -152,7 +153,7 @@ export const update = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") throw new Error("Forbidden");
+    if (!isAuthorizedAdminUser(user, identity.email)) throw new Error("Forbidden");
     const { id, ...fields } = args;
     await ctx.db.patch(id, fields);
   },
@@ -167,7 +168,7 @@ export const remove = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") throw new Error("Forbidden");
+    if (!isAuthorizedAdminUser(user, identity.email)) throw new Error("Forbidden");
     await ctx.db.delete(args.id);
   },
 });

@@ -1,5 +1,6 @@
 import { internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { isAuthorizedAdminUser } from "./adminAccess";
 
 export const createOrder = mutation({
   args: {
@@ -237,7 +238,7 @@ export const getAllOrders = query({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") return [];
+    if (!isAuthorizedAdminUser(user, identity.email)) return [];
     const orders = await ctx.db.query("orders").order("desc").collect();
     return await Promise.all(
       orders.map(async (order) => {
@@ -263,7 +264,10 @@ export const getOrderById = query({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || (order.userId !== user._id && user.role !== "admin")) return null;
+    if (
+      !user ||
+      (order.userId !== user._id && !isAuthorizedAdminUser(user, identity.email))
+    ) return null;
     return order;
   },
 });
@@ -287,7 +291,7 @@ export const updateOrderStatus = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") throw new Error("Forbidden");
+    if (!isAuthorizedAdminUser(user, identity.email)) throw new Error("Forbidden");
     await ctx.db.patch(args.orderId, { status: args.status });
   },
 });
@@ -301,7 +305,7 @@ export const getAdminStats = query({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!user || user.role !== "admin") return null;
+    if (!isAuthorizedAdminUser(user, identity.email)) return null;
 
     const ORDER_STATUSES = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled"] as const;
 

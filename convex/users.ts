@@ -1,8 +1,9 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-
-// Emails that are automatically granted admin role on first sign-in
-const ADMIN_EMAILS = ["rikashii069@gmail.com"];
+import {
+  isAuthorizedAdminEmail,
+  isAuthorizedAdminUser,
+} from "./adminAccess";
 
 export const updateCurrentUser = mutation({
   args: {},
@@ -10,7 +11,7 @@ export const updateCurrentUser = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    const isAdminEmail = ADMIN_EMAILS.includes(identity.email ?? "");
+    const isAdminEmail = isAuthorizedAdminEmail(identity.email);
 
     const existing = await ctx.db
       .query("users")
@@ -22,8 +23,7 @@ export const updateCurrentUser = mutation({
         name: identity.name,
         email: identity.email,
         avatar: identity.profileUrl,
-        // Promote to admin if email matches — never demote existing admins
-        ...(isAdminEmail && existing.role !== "admin" ? { role: "admin" as const } : {}),
+        role: isAdminEmail ? "admin" : "user",
       });
       return existing._id;
     }
@@ -43,10 +43,15 @@ export const getCurrentUser = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
-    return await ctx.db
+    const user = await ctx.db
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
+    if (!user) return null;
+    return {
+      ...user,
+      role: isAuthorizedAdminEmail(identity.email) ? user.role : "user" as const,
+    };
   },
 });
 
@@ -79,8 +84,14 @@ export const getAllUsers = query({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!me || me.role !== "admin") return [];
-    return await ctx.db.query("users").collect();
+    if (!isAuthorizedAdminUser(me, identity.email)) return [];
+    return await ctx.db.query("users").collect().then((users) =>
+      users.map((user) => ({
+        ...user,
+        role: isAuthorizedAdminEmail(user.email) ? user.role : "user" as const,
+        canBeAdmin: isAuthorizedAdminEmail(user.email),
+      })),
+    );
   },
 });
 
@@ -96,7 +107,12 @@ export const updateUserRole = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!me || me.role !== "admin") throw new Error("Forbidden");
-    await ctx.db.patch(args.userId, { role: args.role });
+    if (!isAuthorizedAdminUser(me, identity.email)) throw new Error("Forbidden");
+    const target = await ctx.db.get(args.userId);
+    if (!target) throw new Error("User not found");
+    if (args.role === "admin" && !isAuthorizedAdminEmail(target.email)) {
+      throw new Error("Only approved email addresses can be admins");
+    }
+    await ctx.db.patch(target._id, { role: args.role });
   },
 });

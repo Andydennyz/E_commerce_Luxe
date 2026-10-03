@@ -1,12 +1,13 @@
 import { useQuery, useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { Authenticated, Unauthenticated } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import GlassCard from "@/components/glass-card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { useAuth } from "@usehercules/auth/react";
 import {
   LayoutDashboard,
   Package,
@@ -25,6 +26,7 @@ import {
   Check,
   BarChart3,
   Video,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import NeonButton from "@/components/neon-button.tsx";
@@ -63,15 +65,24 @@ const STATUS_COLORS: Record<string, string> = {
 
 function AdminGuard({ children }: { children: React.ReactNode }) {
   const user = useQuery(api.users.getCurrentUser);
+  const unauthorizedAlertShown = useRef(false);
+
+  useEffect(() => {
+    if (user && user.role !== "admin" && !unauthorizedAlertShown.current) {
+      unauthorizedAlertShown.current = true;
+      toast.error("You are not authorized to access the admin page.");
+    }
+  }, [user]);
+
   if (user === undefined) return <Skeleton className="h-64 w-full" />;
   if (!user || user.role !== "admin") {
     return (
-      <div className="text-center py-20">
+      <div className="text-center py-20" role="alert">
         <div className="w-16 h-16 rounded-full bg-destructive/10 border border-destructive/30 flex items-center justify-center mx-auto mb-4">
           <Shield className="w-8 h-8 text-destructive" />
         </div>
-        <p className="text-xl font-bold mb-2">Admin Access Required</p>
-        <p className="text-muted-foreground">You need admin privileges to view this page.</p>
+        <p className="text-xl font-bold mb-2">Not Authorized</p>
+        <p className="text-muted-foreground">This email is not authorized to access the admin page.</p>
       </div>
     );
   }
@@ -789,7 +800,7 @@ function UsersTab() {
                   className="bg-secondary border border-border rounded-sm px-2 py-1 text-xs text-foreground outline-none focus:border-primary transition-all cursor-pointer"
                 >
                   <option value="user">User</option>
-                  <option value="admin">Admin</option>
+                  {user.canBeAdmin && <option value="admin">Admin</option>}
                 </select>
               </div>
             </GlassCard>
@@ -803,6 +814,7 @@ function UsersTab() {
 /* ─── MAIN ADMIN ─────────────────────────────────────────────── */
 function AdminContent() {
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
+  const { signout } = useAuth();
 
   const tabs: { id: AdminTab; label: string; icon: typeof LayoutDashboard }[] = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -812,6 +824,10 @@ function AdminContent() {
     { id: "videos", label: "Videos", icon: Video },
     { id: "users", label: "Users", icon: Users },
   ];
+
+  const handleSignOut = async () => {
+    await signout();
+  };
 
   return (
     <div className="grid lg:grid-cols-5 gap-6">
@@ -833,6 +849,13 @@ function AdminContent() {
               <span className="hidden lg:block">{label}</span>
             </button>
           ))}
+          <button
+            onClick={handleSignOut}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-sm text-sm font-semibold uppercase tracking-widest transition-all cursor-pointer text-muted-foreground hover:text-destructive hover:bg-destructive/10 mt-4"
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            <span className="hidden lg:block">Sign Out</span>
+          </button>
         </GlassCard>
       </div>
 
