@@ -1,0 +1,18 @@
+services:
+  ecommerce-luxe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_HERCULES_WEBSITE_ID: ${VITE_HERCULES_WEBSITE_ID}
+        VITE_HERCULES_OIDC_AUTHORITY: ${VITE_HERCULES_OIDC_AUTHORITY}
+        VITE_HERCULES_OIDC_CLIENT_ID: ${VITE_HERCULES_OIDC_CLIENT_ID}
+        VITE_CONVEX_URL: ${VITE_CONVEX_URL}
+        VITE_CONVEX_SITE_URL: ${VITE_CONVEX_SITE_URL}
+
+    container_name: ecommerce-luxe
+
+    ports:
+      - "8080:80"
+
+    restart: unless-stopped
