@@ -7,14 +7,14 @@ import {
   ShoppingCart, Heart, Star, ArrowLeft, ZoomIn, X,
   Truck, Shield, RotateCcw, Share2, CheckCircle,
 } from "lucide-react";
-import { Authenticated, Unauthenticated } from "convex/react";
+import { Authenticated } from "convex/react";
 import { toast } from "sonner";
 import NeonButton from "@/components/neon-button.tsx";
 import ProductCard from "@/components/product-card.tsx";
 import GlassCard from "@/components/glass-card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { SignInButton } from "@/components/ui/signin.tsx";
 import { cn } from "@/lib/utils.ts";
+import { useGuestCart } from "@/components/providers/guest-cart.tsx";
 
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -24,13 +24,15 @@ export default function ProductPage() {
   const related = useQuery(api.products.getRelated, product ? { categoryId: product.categoryId, excludeId: product._id } : "skip");
   const isWishlisted = useQuery(api.wishlist.isInWishlist, product ? { productId: product._id } : "skip");
 
-  const addToCart = useMutation(api.cart.addToCart);
+  const { addItem } = useGuestCart();
   const toggleWishlist = useMutation(api.wishlist.toggleWishlist);
   const addReview = useMutation(api.reviews.addReview);
 
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [customMode, setCustomMode] = useState(false);
+  const [customAttributes, setCustomAttributes] = useState([{ name: "", value: "" }]);
   const [quantity, setQuantity] = useState(1);
   const [zoomed, setZoomed] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
@@ -73,14 +75,25 @@ export default function ProductPage() {
   }
 
   const handleAddToCart = async () => {
-    if (!selectedSize) { toast.error("Please select a size"); return; }
-    if (!selectedColor) { toast.error("Please select a color"); return; }
     try {
-      await addToCart({ productId: product._id, quantity, size: selectedSize, color: selectedColor });
+      if (customMode) {
+        const attributes = customAttributes
+          .map(({ name, value }) => ({ name: name.trim(), value: value.trim() }))
+          .filter(({ name, value }) => name && value);
+        if (attributes.length === 0 || attributes.length !== customAttributes.length) {
+          toast.error("Please complete each custom attribute");
+          return;
+        }
+        addItem(product, quantity, "Custom", "Custom", attributes);
+      } else {
+        if (product.sizes.length > 0 && !selectedSize) { toast.error("Please select a size"); return; }
+        if (product.colors.length > 0 && !selectedColor) { toast.error("Please select a color"); return; }
+        addItem(product, quantity, selectedSize ?? "N/A", selectedColor ?? "N/A");
+      }
       setAddedToCart(true);
       toast.success("Added to cart!");
       setTimeout(() => setAddedToCart(false), 2500);
-    } catch { toast.error("Sign in to add to cart"); }
+    } catch { toast.error("Could not add this item to your cart"); }
   };
 
   const handleWishlist = async () => {
@@ -228,8 +241,30 @@ export default function ProductPage() {
 
             <p className="text-muted-foreground leading-relaxed text-sm">{product.description}</p>
 
-            {/* Colors */}
-            {product.colors.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs uppercase tracking-widest text-muted-foreground">Product options</p>
+                <div className="flex gap-2">
+                  {(["standard", "custom"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={customMode === (mode === "custom")}
+                      onClick={() => setCustomMode(mode === "custom")}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-semibold uppercase tracking-widest rounded-sm border transition-all cursor-pointer",
+                        customMode === (mode === "custom")
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-secondary border-border text-muted-foreground hover:border-primary/50",
+                      )}
+                    >
+                      {mode === "custom" ? "Custom" : "Standard"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            {!customMode && product.colors.length > 0 && (
               <div>
                 <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
                   Color: <span className="text-foreground font-semibold">{selectedColor ?? "Select one"}</span>
@@ -253,8 +288,7 @@ export default function ProductPage() {
               </div>
             )}
 
-            {/* Sizes */}
-            {product.sizes.length > 0 && (
+            {!customMode && product.sizes.length > 0 && (
               <div>
                 <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
                   Size: <span className="text-foreground font-semibold">{selectedSize ?? "Select one"}</span>
@@ -277,6 +311,74 @@ export default function ProductPage() {
                 </div>
               </div>
             )}
+            {customMode && (
+              <div className="space-y-3 rounded-sm border border-primary/30 bg-primary/5 p-4">
+                <div>
+                  <p className="text-sm font-bold text-primary">Custom attributes</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Specify the product details you want, such as a custom size, color, or material.
+                  </p>
+                </div>
+                {customAttributes.map((attribute, index) => (
+                  <div key={index} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      aria-label={`Custom attribute ${index + 1} name`}
+                      value={attribute.name}
+                      onChange={(event) =>
+                        setCustomAttributes((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, name: event.target.value } : item,
+                          ),
+                        )
+                      }
+                      maxLength={40}
+                      placeholder="Attribute (e.g. Material)"
+                      className="w-full bg-secondary border border-border rounded-sm px-3 py-2.5 text-sm outline-none focus:border-primary transition-all"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        aria-label={`Custom attribute ${index + 1} value`}
+                        value={attribute.value}
+                        onChange={(event) =>
+                          setCustomAttributes((current) =>
+                            current.map((item, itemIndex) =>
+                              itemIndex === index ? { ...item, value: event.target.value } : item,
+                            ),
+                          )
+                        }
+                        maxLength={100}
+                        placeholder="Your preference"
+                        className="min-w-0 flex-1 bg-secondary border border-border rounded-sm px-3 py-2.5 text-sm outline-none focus:border-primary transition-all"
+                      />
+                      {customAttributes.length > 1 && (
+                        <button
+                          type="button"
+                          aria-label={`Remove custom attribute ${index + 1}`}
+                          onClick={() =>
+                            setCustomAttributes((current) =>
+                              current.filter((_, itemIndex) => itemIndex !== index),
+                            )
+                          }
+                          className="px-3 rounded-sm border border-border text-muted-foreground hover:text-destructive hover:border-destructive"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {customAttributes.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomAttributes((current) => [...current, { name: "", value: "" }])}
+                    className="text-xs font-semibold uppercase tracking-widest text-primary hover:text-foreground transition-colors"
+                  >
+                    + Add another attribute
+                  </button>
+                )}
+              </div>
+            )}
+            </div>
 
             {/* Quantity */}
             <div className="flex items-center gap-4">
@@ -300,15 +402,15 @@ export default function ProductPage() {
             </div>
 
             {/* Actions */}
-            <Authenticated>
-              <div className="flex gap-3">
-                <NeonButton fullWidth onClick={handleAddToCart} variant={addedToCart ? "blue" : "purple"}>
-                  {addedToCart ? (
-                    <><CheckCircle className="w-5 h-5" /> Added!</>
-                  ) : (
-                    <><ShoppingCart className="w-5 h-5" /> Add to Cart</>
-                  )}
-                </NeonButton>
+            <div className="flex gap-3">
+              <NeonButton fullWidth onClick={handleAddToCart} variant={addedToCart ? "blue" : "purple"}>
+                {addedToCart ? (
+                  <><CheckCircle className="w-5 h-5" /> Added!</>
+                ) : (
+                  <><ShoppingCart className="w-5 h-5" /> Add to Cart</>
+                )}
+              </NeonButton>
+              <Authenticated>
                 <button
                   onClick={handleWishlist}
                   className={cn(
@@ -320,14 +422,8 @@ export default function ProductPage() {
                 >
                   <Heart className={cn("w-5 h-5", isWishlisted && "fill-current")} />
                 </button>
-              </div>
-            </Authenticated>
-            <Unauthenticated>
-              <div className="space-y-2">
-                <SignInButton className="w-full py-4 text-sm font-bold uppercase tracking-widest rounded-sm bg-primary text-primary-foreground hover:shadow-[0_0_30px_rgba(168,85,247,0.5)] transition-all cursor-pointer" />
-                <p className="text-xs text-center text-muted-foreground">Sign in to add to cart or wishlist</p>
-              </div>
-            </Unauthenticated>
+              </Authenticated>
+            </div>
 
             {/* Trust badges */}
             <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border/50">
@@ -474,13 +570,6 @@ export default function ProductPage() {
               </GlassCard>
               )}
             </Authenticated>
-            <Unauthenticated>
-              <GlassCard className="p-6 text-center space-y-3 h-fit">
-                <Star className="w-8 h-8 text-primary mx-auto" />
-                <p className="text-sm text-muted-foreground">Sign in to leave a review</p>
-                <SignInButton className="w-full py-3 text-sm font-bold uppercase tracking-widest rounded-sm bg-primary text-primary-foreground hover:shadow-[0_0_20px_rgba(168,85,247,0.5)] transition-all cursor-pointer" />
-              </GlassCard>
-            </Unauthenticated>
           </div>
         </div>
 

@@ -74,7 +74,7 @@ export default defineSchema({
   }).index("by_code", ["code"]),
 
   orders: defineTable({
-    userId: v.id("users"),
+    userId: v.optional(v.id("users")),
     status: v.union(
       v.literal("pending"),
       v.literal("confirmed"),
@@ -107,16 +107,19 @@ export default defineSchema({
     shippingAddress: v.object({
       fullName: v.string(),
       phone: v.string(),
-      address: v.string(),
-      city: v.string(),
-      country: v.string(),
-      postalCode: v.string(),
+      address: v.optional(v.string()),
+      city: v.optional(v.string()),
+      country: v.optional(v.string()),
+      postalCode: v.optional(v.string()),
+      location: v.optional(v.string()),
+      destination: v.optional(v.string()),
     }),
     notes: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])
-    .index("by_payment_status", ["paymentStatus"]),
+    .index("by_payment_status", ["paymentStatus"])
+    .index("by_paystack_reference", ["paystackReference"]),
 
   orderItems: defineTable({
     orderId: v.id("orders"),
@@ -127,6 +130,9 @@ export default defineSchema({
     quantity: v.number(),
     size: v.string(),
     color: v.string(),
+    customAttributes: v.optional(
+      v.array(v.object({ name: v.string(), value: v.string() })),
+    ),
   }).index("by_order", ["orderId"]),
 
   cartItems: defineTable({
@@ -135,6 +141,9 @@ export default defineSchema({
     quantity: v.number(),
     size: v.string(),
     color: v.string(),
+    customAttributes: v.optional(
+      v.array(v.object({ name: v.string(), value: v.string() })),
+    ),
   })
     .index("by_user", ["userId"])
     .index("by_user_and_product", ["userId", "productId"]),

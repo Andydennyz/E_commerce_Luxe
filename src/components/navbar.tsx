@@ -1,17 +1,15 @@
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ShoppingCart, Heart, Search, Menu, X, User, Zap, LayoutDashboard } from "lucide-react";
-import { Authenticated, Unauthenticated } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
+import { ShoppingCart, Search, Menu, X, Zap, LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
+import { useGuestCart } from "@/components/providers/guest-cart.tsx";
 
 const navLinks = [
   { label: "Shop", href: "/shop" },
   { label: "Collections", href: "/shop?collection=new" },
   { label: "Trending", href: "/shop?trending=true" },
+  { label: "Lookbook", href: "/lookbook" },
   { label: "About", href: "/about" },
 ];
 
@@ -22,10 +20,8 @@ export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
 
-  const cartItems = useQuery(api.cart.getCart);
+  const { items: cartItems } = useGuestCart();
   const cartCount = cartItems?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
-  const currentUser = useQuery(api.users.getCurrentUser);
-  const isAdmin = currentUser?.role === "admin";
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -95,16 +91,6 @@ export default function Navbar() {
                 <Search className="w-5 h-5" />
               </Link>
 
-              {/* Wishlist */}
-              <Authenticated>
-                <Link
-                  to="/wishlist"
-                  className="p-2 text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <Heart className="w-5 h-5" />
-                </Link>
-              </Authenticated>
-
               {/* Cart */}
               <Link to="/cart" className="relative p-2 text-muted-foreground hover:text-primary transition-colors">
                 <ShoppingCart className="w-5 h-5" />
@@ -119,29 +105,14 @@ export default function Navbar() {
                 )}
               </Link>
 
-              {/* Admin */}
-              {isAdmin && (
-                <Link
-                  to="/admin"
-                  className="p-2 text-primary hover:text-accent transition-colors"
-                  title="Admin Dashboard"
-                >
-                  <LayoutDashboard className="w-5 h-5" />
-                </Link>
-              )}
-
-              {/* Auth */}
-              <Authenticated>
-                <Link
-                  to="/profile"
-                  className="p-2 text-muted-foreground hover:text-primary transition-colors"
-                >
-                  <User className="w-5 h-5" />
-                </Link>
-              </Authenticated>
-              <Unauthenticated>
-                <SignInButton className="hidden md:flex px-4 py-2 text-xs uppercase tracking-widest font-semibold rounded-sm border border-primary/50 text-primary hover:bg-primary hover:text-primary-foreground transition-all duration-300 shadow-[0_0_15px_rgba(168,85,247,0.2)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]" />
-              </Unauthenticated>
+              <Link
+                to="/admin"
+                className="p-2 text-muted-foreground hover:text-primary transition-colors"
+                title="Admin Dashboard"
+                aria-label="Admin dashboard"
+              >
+                <LayoutDashboard className="w-5 h-5" />
+              </Link>
 
               {/* Mobile menu toggle */}
               <button
@@ -174,19 +145,14 @@ export default function Navbar() {
                     {link.label}
                   </Link>
                 ))}
-                {isAdmin && (
-                  <Link
-                    to="/admin"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-2 text-sm uppercase tracking-widest text-primary hover:text-accent transition-colors py-2"
-                  >
-                    <LayoutDashboard className="w-4 h-4" />
-                    Admin Dashboard
-                  </Link>
-                )}
-                <Unauthenticated>
-                  <SignInButton className="w-full py-3 text-xs uppercase tracking-widest font-semibold rounded-sm border border-primary/50 text-primary hover:bg-primary hover:text-primary-foreground transition-all duration-300" />
-                </Unauthenticated>
+                <Link
+                  to="/admin"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 text-sm uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors py-2"
+                >
+                  <LayoutDashboard className="w-4 h-4" />
+                  Admin Dashboard
+                </Link>
               </div>
             </motion.div>
           )}

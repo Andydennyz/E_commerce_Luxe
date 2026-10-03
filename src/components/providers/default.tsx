@@ -4,6 +4,7 @@ import { QueryClientProvider } from "./query-client.tsx";
 import { ThemeProvider } from "./theme.tsx";
 import { Toaster } from "../ui/sonner.tsx";
 import { TooltipProvider } from "../ui/tooltip.tsx";
+import { GuestCartProvider } from "./guest-cart.tsx";
 
 export function DefaultProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -12,8 +13,10 @@ export function DefaultProviders({ children }: { children: React.ReactNode }) {
         <QueryClientProvider>
           <TooltipProvider>
             <ThemeProvider>
-              <Toaster />
-              {children}
+              <GuestCartProvider>
+                <Toaster />
+                {children}
+              </GuestCartProvider>
             </ThemeProvider>
           </TooltipProvider>
         </QueryClientProvider>

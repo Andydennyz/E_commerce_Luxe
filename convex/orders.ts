@@ -1,57 +1,203 @@
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const createOrder = mutation({
   args: {
-    subtotal: v.number(),
-    deliveryFee: v.number(),
-    discount: v.number(),
-    total: v.number(),
-    couponCode: v.optional(v.string()),
-    paymentMethod: v.union(v.literal("stripe"), v.literal("mpesa"), v.literal("paystack"), v.literal("cod")),
+    paymentMethod: v.union(v.literal("mpesa"), v.literal("paystack")),
     shippingAddress: v.object({
       fullName: v.string(),
       phone: v.string(),
-      address: v.string(),
-      city: v.string(),
-      country: v.string(),
-      postalCode: v.string(),
+      location: v.string(),
+      destination: v.string(),
     }),
     items: v.array(
       v.object({
         productId: v.id("products"),
-        productName: v.string(),
-        productImage: v.string(),
-        price: v.number(),
         quantity: v.number(),
         size: v.string(),
         color: v.string(),
+        customAttributes: v.optional(
+          v.array(v.object({ name: v.string(), value: v.string() })),
+        ),
       }),
     ),
-    notes: v.optional(v.string()),
   },
+  returns: v.object({ orderId: v.id("orders"), total: v.number() }),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthorized");
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-    if (!user) throw new Error("User not found");
+    const user = identity
+      ? await ctx.db
+          .query("users")
+          .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+          .unique()
+      : null;
+    const products = await Promise.all(
+      args.items.map((item) => ctx.db.get(item.productId)),
+    );
+    const orderItems = args.items.map((item, index) => {
+      const product = products[index];
+      if (!product) throw new Error("A product in your cart is no longer available");
+      if (!Number.isInteger(item.quantity) || item.quantity < 1) {
+        throw new Error("Cart quantity is invalid");
+      }
+      if (product.stock < item.quantity) {
+        throw new Error(`${product.name} does not have enough stock`);
+      }
+      if (item.size === "Custom" || item.color === "Custom") {
+        if (!item.customAttributes?.length) {
+          throw new Error("Custom product attributes are required");
+        }
+        if (
+          item.customAttributes.length > 5 ||
+          item.customAttributes.some(
+            ({ name, value }) =>
+              !name.trim() ||
+              name.length > 40 ||
+              !value.trim() ||
+              value.length > 100,
+          )
+        ) {
+          throw new Error("Custom product attributes are invalid");
+        }
+      } else if (item.customAttributes?.length) {
+        throw new Error("Custom attributes require custom product options");
+      }
+      if (item.size !== "Custom" && product.sizes.length > 0 && !product.sizes.includes(item.size)) {
+        throw new Error(`Selected size is unavailable for ${product.name}`);
+      }
+      if (item.color !== "Custom" && product.colors.length > 0 && !product.colors.includes(item.color)) {
+        throw new Error(`Selected color is unavailable for ${product.name}`);
+      }
+      return {
+        productId: product._id,
+        productName: product.name,
+        productImage: product.images[0] ?? "",
+        price: product.price,
+        quantity: item.quantity,
+        size: item.size,
+        color: item.color,
+        ...(item.customAttributes ? { customAttributes: item.customAttributes } : {}),
+      };
+    });
+    if (orderItems.length === 0) throw new Error("Your cart is empty");
 
-    const { items, ...orderData } = args;
+    const subtotal = orderItems.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0,
+    );
+    const deliveryFee = 9.99;
+    const total = subtotal + deliveryFee;
     const orderId = await ctx.db.insert("orders", {
-      ...orderData,
-      userId: user._id,
+      ...(user ? { userId: user._id } : {}),
       status: "pending",
       paymentStatus: "pending",
+      paymentMethod: args.paymentMethod,
+      subtotal,
+      deliveryFee,
+      discount: 0,
+      total,
+      shippingAddress: args.shippingAddress,
     });
 
     await Promise.all(
-      items.map((item) => ctx.db.insert("orderItems", { orderId, ...item })),
+      orderItems.map((item) => ctx.db.insert("orderItems", { orderId, ...item })),
     );
 
-    return orderId;
+    return { orderId, total };
+  },
+});
+
+export const getOrderForMpesa = internalQuery({
+  args: { orderId: v.id("orders") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      status: v.union(
+        v.literal("pending"),
+        v.literal("confirmed"),
+        v.literal("processing"),
+        v.literal("shipped"),
+        v.literal("delivered"),
+        v.literal("cancelled"),
+      ),
+      paymentStatus: v.union(v.literal("pending"), v.literal("paid"), v.literal("failed")),
+      paymentMethod: v.union(
+        v.literal("stripe"),
+        v.literal("mpesa"),
+        v.literal("paystack"),
+        v.literal("cod"),
+      ),
+      total: v.number(),
+      phone: v.string(),
+      checkoutRequestId: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get(args.orderId);
+    if (!order) return null;
+    return {
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      total: order.total,
+      phone: order.shippingAddress.phone,
+      checkoutRequestId: order.mpesaCheckoutRequestId,
+    };
+  },
+});
+
+export const getOrderForPaystack = internalQuery({
+  args: { orderId: v.id("orders") },
+  returns: v.union(
+    v.null(),
+    v.object({
+      status: v.string(),
+      paymentStatus: v.string(),
+      paymentMethod: v.string(),
+      total: v.number(),
+      paystackReference: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get(args.orderId);
+    if (!order) return null;
+    return {
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      total: order.total,
+      paystackReference: order.paystackReference,
+    };
+  },
+});
+
+export const getOrderForPaystackReference = internalQuery({
+  args: { reference: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      orderId: v.id("orders"),
+      status: v.string(),
+      paymentStatus: v.string(),
+      paymentMethod: v.string(),
+      total: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const order = await ctx.db
+      .query("orders")
+      .withIndex("by_paystack_reference", (q) =>
+        q.eq("paystackReference", args.reference),
+      )
+      .unique();
+    if (!order) return null;
+    return {
+      orderId: order._id,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
+      total: order.total,
+    };
   },
 });
 
@@ -99,7 +245,7 @@ export const getAllOrders = query({
           .query("orderItems")
           .withIndex("by_order", (q) => q.eq("orderId", order._id))
           .collect();
-        const customer = await ctx.db.get(order.userId);
+        const customer = order.userId ? await ctx.db.get(order.userId) : null;
         return { ...order, items, customer };
       }),
     );

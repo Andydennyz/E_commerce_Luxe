@@ -4,6 +4,10 @@ import { internal } from "./_generated/api";
 
 const http = httpRouter();
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 // Verify Paystack webhook HMAC-SHA512 signature using Web Crypto API
 async function verifyPaystackSignature(
   body: string,
@@ -99,30 +103,36 @@ http.route({
       const signature = request.headers.get("x-paystack-signature") ?? "";
       const secret = process.env.PAYSTACK_SECRET_KEY ?? "";
 
-      // Verify HMAC-SHA512 signature when secret is configured
-      if (secret) {
-        const valid = await verifyPaystackSignature(rawBody, signature, secret);
-        if (!valid) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+      if (!secret) {
+        console.error("Paystack webhook rejected because PAYSTACK_SECRET_KEY is not configured");
+        return new Response("Webhook is not configured", { status: 500 });
+      }
+      const valid = await verifyPaystackSignature(rawBody, signature, secret);
+      if (!valid) {
+        return new Response("Unauthorized", { status: 401 });
       }
 
-      const event = JSON.parse(rawBody) as {
-        event: string;
-        data: {
-          reference: string;
-          status: string;
-          amount: number;
-          paid_at: string | null;
-        };
-      };
+      const event: unknown = JSON.parse(rawBody);
+      if (!isRecord(event) || typeof event.event !== "string" || !isRecord(event.data)) {
+        return new Response("Invalid webhook payload", { status: 400 });
+      }
 
       if (event.event === "charge.success") {
+        const { reference, status, amount, paid_at: paidAt } = event.data;
+        if (
+          typeof reference !== "string" ||
+          typeof status !== "string" ||
+          typeof amount !== "number" ||
+          !Number.isFinite(amount) ||
+          (paidAt !== undefined && paidAt !== null && typeof paidAt !== "string")
+        ) {
+          return new Response("Invalid payment event", { status: 400 });
+        }
         await ctx.runMutation(internal.paystack_mutations.handleWebhook, {
-          reference: event.data.reference,
-          status: event.data.status,
-          amount: event.data.amount,
-          paidAt: event.data.paid_at ?? undefined,
+          reference,
+          status,
+          amount,
+          ...(typeof paidAt === "string" ? { paidAt } : {}),
         });
       }
 

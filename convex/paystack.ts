@@ -22,8 +22,23 @@ export const initializeTransaction = action({
     ctx,
     args,
   ): Promise<{ authorizationUrl: string; reference: string; accessCode: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthenticated");
+    const order = await ctx.runQuery(internal.orders.getOrderForPaystack, {
+      orderId: args.orderId,
+    });
+    if (
+      !order ||
+      order.paymentMethod !== "paystack" ||
+      order.paymentStatus !== "pending" ||
+      order.status !== "pending" ||
+      order.paystackReference ||
+      args.amount !== order.total
+    ) {
+      throw new Error("Order details could not be validated for Paystack payment");
+    }
+    const email = args.email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error("A valid email address is required for Paystack payment");
+    }
 
     const secretKey = getPaystackSecretKey();
 
@@ -41,7 +56,7 @@ export const initializeTransaction = action({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        email: args.email,
+        email,
         amount: amountInSmallestUnit,
         reference,
         callback_url: args.callbackUrl,
@@ -69,7 +84,12 @@ export const initializeTransaction = action({
       };
     };
 
-    if (!res.ok || !data.status || !data.data) {
+    if (
+      !res.ok ||
+      !data.status ||
+      !data.data ||
+      data.data.reference !== reference
+    ) {
       throw new Error(data.message ?? "Failed to initialize Paystack transaction");
     }
 
@@ -91,9 +111,23 @@ export const initializeTransaction = action({
 export const verifyTransaction = action({
   args: { reference: v.string() },
   handler: async (
-    _ctx,
+    ctx,
     args,
   ): Promise<{ status: string; amount: number; paidAt: string | null }> => {
+    const order = await ctx.runQuery(
+      internal.orders.getOrderForPaystackReference,
+      { reference: args.reference },
+    );
+    if (
+      !order ||
+      order.paymentMethod !== "paystack" ||
+      (order.paymentStatus !== "pending" && order.paymentStatus !== "paid") ||
+      (order.status !== "pending" &&
+        !(order.paymentStatus === "paid" && order.status === "confirmed"))
+    ) {
+      throw new Error("Paystack reference does not match a payable order");
+    }
+
     const secretKey = getPaystackSecretKey();
 
     const res = await fetch(
@@ -116,6 +150,22 @@ export const verifyTransaction = action({
 
     if (!res.ok || !data.status || !data.data) {
       throw new Error(data.message ?? "Failed to verify transaction");
+    }
+    if (data.data.reference !== args.reference) {
+      throw new Error("Paystack returned a different transaction reference");
+    }
+    if (
+      data.data.status === "success" &&
+      data.data.amount !== Math.round(order.total * 100)
+    ) {
+      throw new Error("Paystack payment amount does not match the order total");
+    }
+    if (data.data.status === "success") {
+      await ctx.runMutation(internal.paystack_mutations.confirmVerifiedPayment, {
+        orderId: order.orderId,
+        reference: args.reference,
+        amount: data.data.amount,
+      });
     }
 
     return {

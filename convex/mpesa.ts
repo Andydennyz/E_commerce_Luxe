@@ -89,8 +89,20 @@ export const initiateStkPush = action({
     ctx,
     args,
   ): Promise<{ success: boolean; checkoutRequestId: string; customerMessage: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Unauthenticated");
+    const order = await ctx.runQuery(internal.orders.getOrderForMpesa, {
+      orderId: args.orderId,
+    });
+    if (
+      !order ||
+      order.paymentMethod !== "mpesa" ||
+      order.paymentStatus !== "pending" ||
+      order.status !== "pending" ||
+      order.checkoutRequestId ||
+      args.amount !== order.total ||
+      normalizePhone(args.phone) !== normalizePhone(order.phone)
+    ) {
+      throw new Error("Order details could not be validated for M-Pesa payment");
+    }
 
     const { consumerKey, consumerSecret, shortcode, paybill, accountNumber, passkey, callbackUrl, baseUrl } =
       getMpesaConfig();
@@ -98,7 +110,7 @@ export const initiateStkPush = action({
     const accessToken = await getAccessToken(baseUrl, consumerKey, consumerSecret);
     const timestamp = getTimestamp();
     const password = generatePassword(shortcode, passkey, timestamp);
-    const phone = normalizePhone(args.phone);
+    const phone = normalizePhone(order.phone);
     const amount = Math.ceil(args.amount);
 
     const body = {

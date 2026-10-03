@@ -1,19 +1,15 @@
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Plus, Minus, ShoppingBag, ArrowRight,
-  Tag, X, CheckCircle, ShoppingCart, Heart,
+  Tag, X, CheckCircle, ShoppingCart,
 } from "lucide-react";
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { SignInButton } from "@/components/ui/signin.tsx";
 import { toast } from "sonner";
 import NeonButton from "@/components/neon-button.tsx";
 import GlassCard from "@/components/glass-card.tsx";
-import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { useState } from "react";
 import { cn } from "@/lib/utils.ts";
+import { useGuestCart } from "@/components/providers/guest-cart.tsx";
 
 const VALID_COUPONS: Record<string, { label: string; pct: number }> = {
   CYBER40: { label: "CYBER40", pct: 0.1 },
@@ -23,28 +19,12 @@ const DELIVERY_FEE = 9.99;
 const FREE_SHIPPING_THRESHOLD = 50;
 
 function CartContent() {
-  const cartItems = useQuery(api.cart.getCart);
-  const updateQuantity = useMutation(api.cart.updateQuantity);
-  const removeItem = useMutation(api.cart.removeFromCart);
-  const toggleWishlist = useMutation(api.wishlist.toggleWishlist);
+  const { items: cartItems, updateQuantity, removeItem } = useGuestCart();
   const navigate = useNavigate();
 
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{ label: string; pct: number } | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
-
-  if (cartItems === undefined) {
-    return (
-      <div className="grid lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full rounded-md" />
-          ))}
-        </div>
-        <Skeleton className="h-72 rounded-md" />
-      </div>
-    );
-  }
 
   if (cartItems.length === 0) {
     return (
@@ -71,7 +51,7 @@ function CartContent() {
     );
   }
 
-  const subtotal = cartItems.reduce((sum, item) => sum + (item.product?.price ?? 0) * item.quantity, 0);
+  const subtotal = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const couponDiscount = appliedCoupon ? subtotal * appliedCoupon.pct : 0;
   const shippingFee = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DELIVERY_FEE;
   const total = subtotal - couponDiscount + shippingFee;
@@ -88,24 +68,10 @@ function CartContent() {
     }
   };
 
-  const handleRemove = async (cartItemId: string) => {
-    setRemovingId(cartItemId);
-    try {
-      await removeItem({ cartItemId: cartItemId as Parameters<typeof removeItem>[0]["cartItemId"] });
-    } finally {
-      setRemovingId(null);
-    }
-  };
-
-  const handleMoveToWishlist = async (item: (typeof cartItems)[0]) => {
-    if (!item.product) return;
-    try {
-      await toggleWishlist({ productId: item.product._id });
-      await removeItem({ cartItemId: item._id });
-      toast.success("Moved to wishlist");
-    } catch {
-      toast.error("Failed to move item");
-    }
+  const handleRemove = (localId: string) => {
+    setRemovingId(localId);
+    removeItem(localId);
+    setRemovingId(null);
   };
 
   return (
@@ -138,21 +104,21 @@ function CartContent() {
         <AnimatePresence initial={false}>
           {cartItems.map((item, i) => (
             <motion.div
-              key={item._id}
+              key={item.localId}
               layout
               initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 30, height: 0, marginBottom: 0 }}
               transition={{ duration: 0.25, delay: i * 0.04 }}
             >
-              <GlassCard className={cn("p-4 transition-opacity", removingId === item._id && "opacity-50")}>
+              <GlassCard className={cn("p-4 transition-opacity", removingId === item.localId && "opacity-50")}>
                 <div className="flex gap-4">
                   {/* Image */}
-                  <Link to={`/product/${item.product?.slug ?? ""}`} className="shrink-0">
+                  <Link to={`/product/${item.product.slug}`} className="shrink-0">
                     <div className="w-20 h-24 sm:w-24 sm:h-28 rounded-sm overflow-hidden bg-secondary">
                       <img
-                        src={item.product?.images[0] ?? ""}
-                        alt={item.product?.name}
+                        src={item.product.images[0] ?? ""}
+                        alt={item.product.name}
                         className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                         loading="lazy"
                       />
@@ -161,19 +127,28 @@ function CartContent() {
 
                   {/* Details */}
                   <div className="flex-1 min-w-0 space-y-1.5">
-                    <Link to={`/product/${item.product?.slug ?? ""}`}>
+                    <Link to={`/product/${item.product.slug}`}>
                       <h3 className="font-semibold text-sm sm:text-base line-clamp-2 hover:text-primary transition-colors">
-                        {item.product?.name}
+                        {item.product.name}
                       </h3>
                     </Link>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      <span>Size: <span className="text-foreground font-medium">{item.size}</span></span>
-                      <span>Color: <span className="text-foreground font-medium">{item.color}</span></span>
+                      {item.size !== "Custom" && (
+                        <span>Size: <span className="text-foreground font-medium">{item.size}</span></span>
+                      )}
+                      {item.color !== "Custom" && (
+                        <span>Color: <span className="text-foreground font-medium">{item.color}</span></span>
+                      )}
+                      {item.customAttributes?.map((attribute) => (
+                        <span key={attribute.name}>
+                          {attribute.name}: <span className="text-foreground font-medium">{attribute.value}</span>
+                        </span>
+                      ))}
                     </div>
                     <p className="text-base font-black text-primary">
-                      Ksh {((item.product?.price ?? 0) * item.quantity).toFixed(2)}
+                      Ksh {(item.product.price * item.quantity).toFixed(2)}
                     </p>
-                    {item.product?.comparePrice && (
+                    {item.product.comparePrice && (
                       <p className="text-xs text-muted-foreground line-through">
                         Ksh {(item.product.comparePrice * item.quantity).toFixed(2)}
                       </p>
@@ -184,31 +159,23 @@ function CartContent() {
                       {/* Qty controls */}
                       <div className="flex items-center border border-border rounded-sm">
                         <button
-                          onClick={() => updateQuantity({ cartItemId: item._id, quantity: item.quantity - 1 })}
+                          onClick={() => updateQuantity(item.localId, item.quantity - 1)}
                           className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary cursor-pointer transition-colors"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
                         <span className="w-8 text-center text-sm font-bold">{item.quantity}</span>
                         <button
-                          onClick={() => updateQuantity({ cartItemId: item._id, quantity: item.quantity + 1 })}
+                          onClick={() => updateQuantity(item.localId, item.quantity + 1)}
                           className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-primary cursor-pointer transition-colors"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
                       </div>
 
-                      {/* Save for later */}
-                      <button
-                        onClick={() => handleMoveToWishlist(item)}
-                        className="text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer flex items-center gap-1"
-                      >
-                        <Heart className="w-3 h-3" /> Save
-                      </button>
-
                       {/* Remove */}
                       <button
-                        onClick={() => handleRemove(item._id)}
+                        onClick={() => handleRemove(item.localId)}
                         className="text-xs text-muted-foreground hover:text-destructive transition-colors cursor-pointer flex items-center gap-1 ml-auto"
                       >
                         <X className="w-3 h-3" /> Remove
@@ -333,35 +300,7 @@ export default function CartPage() {
             Shopping Cart
           </h1>
         </div>
-        <AuthLoading>
-          <div className="grid lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-4">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-md" />)}
-            </div>
-            <Skeleton className="h-72 rounded-md" />
-          </div>
-        </AuthLoading>
-        <Authenticated>
-          <CartContent />
-        </Authenticated>
-        <Unauthenticated>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center py-24 space-y-6"
-          >
-            <div className="w-24 h-24 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center mx-auto">
-              <ShoppingBag className="w-10 h-10 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-black uppercase mb-2" style={{ fontFamily: "Orbitron, sans-serif" }}>
-                Sign In to View Cart
-              </h2>
-              <p className="text-muted-foreground">Your saved items are waiting for you</p>
-            </div>
-            <SignInButton className="px-8 py-4 bg-primary text-primary-foreground rounded-sm font-bold uppercase tracking-widest hover:shadow-[0_0_30px_rgba(168,85,247,0.5)] transition-all cursor-pointer text-sm" />
-          </motion.div>
-        </Unauthenticated>
+        <CartContent />
       </div>
     </div>
   );

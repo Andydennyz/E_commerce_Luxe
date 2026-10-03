@@ -196,7 +196,8 @@ function OrdersTab() {
     const matchSearch =
       !search ||
       o._id.toLowerCase().includes(search.toLowerCase()) ||
-      (o.customer?.name ?? "").toLowerCase().includes(search.toLowerCase());
+      (o.shippingAddress.fullName ?? o.customer?.name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      o.shippingAddress.phone.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === "all" || o.status === filterStatus;
     return matchSearch && matchStatus;
   });
@@ -244,8 +245,10 @@ function OrdersTab() {
                   </div>
                   <div>
                     <p className="font-mono text-xs text-muted-foreground">#{order._id.slice(-10).toUpperCase()}</p>
-                    <p className="font-semibold text-sm">{order.customer?.name ?? "Unknown Customer"}</p>
-                    <p className="text-xs text-muted-foreground">{order.shippingAddress.city}, {order.shippingAddress.country}</p>
+                    <p className="font-semibold text-sm">{order.shippingAddress.fullName || order.customer?.name || "Guest Customer"}</p>
+                    <p className="text-xs text-muted-foreground">{order.shippingAddress.phone}</p>
+                    <p className="text-xs text-muted-foreground">{order.shippingAddress.location ?? [order.shippingAddress.city, order.shippingAddress.country].filter(Boolean).join(", ")}</p>
+                    <p className="text-xs text-muted-foreground">{order.shippingAddress.destination ?? order.shippingAddress.address}</p>
                     <p className="text-xs text-muted-foreground">{new Date(order._creationTime).toLocaleDateString()}</p>
                   </div>
                 </div>

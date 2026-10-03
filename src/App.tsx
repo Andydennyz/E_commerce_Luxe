@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AuthCallback from "./pages/auth/Callback.tsx";
 import Index from "./pages/Index.tsx";
@@ -12,11 +12,10 @@ const ProductPage = lazy(() => import("./pages/product/page.tsx"));
 const CartPage = lazy(() => import("./pages/cart/page.tsx"));
 const CheckoutPage = lazy(() => import("./pages/checkout/page.tsx"));
 const OrderConfirmPage = lazy(() => import("./pages/checkout/confirm.tsx"));
-const ProfilePage = lazy(() => import("./pages/profile/page.tsx"));
-const WishlistPage = lazy(() => import("./pages/wishlist/page.tsx"));
 const AdminPage = lazy(() => import("./pages/admin/page.tsx"));
 const SearchPage = lazy(() => import("./pages/search/page.tsx"));
 const AboutPage = lazy(() => import("./pages/about/page.tsx"));
+const LookbookPage = lazy(() => import("./pages/lookbook/page.tsx"));
 
 function PageLoader() {
   return (
@@ -79,22 +78,8 @@ export default function App() {
                 </Suspense>
               }
             />
-            <Route
-              path="/profile"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <ProfilePage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/wishlist"
-              element={
-                <Suspense fallback={<PageLoader />}>
-                  <WishlistPage />
-                </Suspense>
-              }
-            />
+            <Route path="/profile" element={<Navigate to="/shop" replace />} />
+            <Route path="/wishlist" element={<Navigate to="/shop" replace />} />
             <Route
               path="/admin"
               element={
@@ -116,6 +101,14 @@ export default function App() {
               element={
                 <Suspense fallback={<PageLoader />}>
                   <AboutPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/lookbook"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <LookbookPage />
                 </Suspense>
               }
             />

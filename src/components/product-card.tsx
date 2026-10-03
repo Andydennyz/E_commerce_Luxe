@@ -7,6 +7,7 @@ import { Authenticated } from "convex/react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
 import type { Doc } from "@/convex/_generated/dataModel.d.ts";
+import { useGuestCart } from "@/components/providers/guest-cart.tsx";
 
 interface ProductCardProps {
   product: Doc<"products">;
@@ -44,21 +45,16 @@ function WishlistButton({ productId }: { productId: Doc<"products">["_id"] }) {
 }
 
 export default function ProductCard({ product, className }: ProductCardProps) {
-  const addToCart = useMutation(api.cart.addToCart);
+  const { addItem } = useGuestCart();
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     try {
-      await addToCart({
-        productId: product._id,
-        quantity: 1,
-        size: product.sizes[0] ?? "M",
-        color: product.colors[0] ?? "Default",
-      });
+      addItem(product, 1, product.sizes[0] ?? "M", product.colors[0] ?? "Default");
       toast.success("Added to cart!");
     } catch {
-      toast.error("Sign in to add to cart");
+      toast.error("Could not add this item to your cart");
     }
   };
 
@@ -121,15 +117,13 @@ export default function ProductCard({ product, className }: ProductCardProps) {
 
           {/* Add to cart button */}
           <div className="absolute bottom-3 left-3 right-3 translate-y-10 group-hover:translate-y-0 transition-transform duration-300">
-            <Authenticated>
-              <button
-                onClick={handleAddToCart}
-                className="w-full py-2.5 bg-primary/90 text-primary-foreground text-xs font-bold uppercase tracking-widest rounded-sm backdrop-blur-md flex items-center justify-center gap-2 hover:bg-primary hover:shadow-[0_0_20px_rgba(168,85,247,0.6)] transition-all cursor-pointer"
-              >
-                <ShoppingCart className="w-3.5 h-3.5" />
-                Add to Cart
-              </button>
-            </Authenticated>
+            <button
+              onClick={handleAddToCart}
+              className="w-full py-2.5 bg-primary/90 text-primary-foreground text-xs font-bold uppercase tracking-widest rounded-sm backdrop-blur-md flex items-center justify-center gap-2 hover:bg-primary hover:shadow-[0_0_20px_rgba(168,85,247,0.6)] transition-all cursor-pointer"
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              Add to Cart
+            </button>
           </div>
         </div>
 
