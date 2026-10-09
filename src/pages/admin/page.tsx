@@ -390,6 +390,7 @@ function ProductsTab() {
                 </div>
                 <EditProductForm
                   product={editingProduct}
+                  categories={categories ?? []}
                   onSave={async (fields) => {
                     try {
                       await updateProduct({ id: editingProduct._id, ...fields });
@@ -410,11 +411,13 @@ function ProductsTab() {
 
 function EditProductForm({
   product,
+  categories,
   onSave,
   onCancel,
 }: {
   product: Doc<"products">;
-  onSave: (fields: { name?: string; price?: number; comparePrice?: number; stock?: number; featured?: boolean; trending?: boolean; newArrival?: boolean; images?: string[] }) => Promise<void>;
+  categories: Doc<"categories">[];
+  onSave: (fields: { name?: string; price?: number; comparePrice?: number; categoryId?: Id<"categories">; stock?: number; featured?: boolean; trending?: boolean; newArrival?: boolean; images?: string[] }) => Promise<void>;
   onCancel: () => void;
 }) {
   const [form, setForm] = useState({
@@ -422,6 +425,7 @@ function EditProductForm({
     price: product.price.toString(),
     comparePrice: product.comparePrice?.toString() ?? "",
     stock: product.stock.toString(),
+    categoryId: product.categoryId,
     featured: product.featured,
     trending: product.trending,
     newArrival: product.newArrival,
@@ -455,6 +459,23 @@ function EditProductForm({
           />
         </div>
       ))}
+      <div>
+        <label className="text-xs uppercase tracking-widest text-muted-foreground mb-1 block">Category</label>
+        <select
+          value={form.categoryId}
+          onChange={(e) =>
+            setForm((p) => ({ ...p, categoryId: e.target.value as Id<"categories"> }))
+          }
+          className="w-full bg-secondary border border-border rounded-sm px-3 py-2 text-sm text-foreground outline-none focus:border-primary transition-all"
+        >
+          {!categories.some((category) => category._id === form.categoryId) && (
+            <option value={form.categoryId}>Current category unavailable</option>
+          )}
+          {categories.map((category) => (
+            <option key={category._id} value={category._id}>{category.name}</option>
+          ))}
+        </select>
+      </div>
       <div className="flex items-center gap-4">
         {(["featured", "trending", "newArrival"] as const).map((field) => (
           <label key={field} className="flex items-center gap-2 cursor-pointer">
@@ -477,6 +498,7 @@ function EditProductForm({
               name: form.name,
               price: parseFloat(form.price),
               comparePrice: form.comparePrice ? parseFloat(form.comparePrice) : undefined,
+              categoryId: form.categoryId,
               stock: parseInt(form.stock),
               featured: form.featured,
               trending: form.trending,
@@ -635,70 +657,147 @@ function AddProductForm({ categories }: { categories: Doc<"categories">[] }) {
 function CategoriesTab() {
   const categories = useQuery(api.categories.list);
   const createCategory = useMutation(api.categories.create);
+  const updateCategory = useMutation(api.categories.update);
   const removeCategory = useMutation(api.categories.remove);
-  const [open, setOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Doc<"categories"> | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", slug: "", description: "", image: "", featured: false });
+  const [form, setForm] = useState({
+    name: "",
+    slug: "",
+    description: "",
+    images: [] as string[],
+    featured: false,
+  });
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setForm({ name: "", slug: "", description: "", images: [], featured: false });
+    setEditingCategory(null);
+    setFormOpen(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name) { toast.error("Name is required"); return; }
+    const name = form.name.trim();
+    const slug = (form.slug.trim() || name).toLowerCase().replace(/\s+/g, "-");
+    if (!name) { toast.error("Name is required"); return; }
+    if (!slug) { toast.error("Slug is required"); return; }
     setSaving(true);
     try {
-      await createCategory({
-        name: form.name,
-        slug: form.slug || form.name.toLowerCase().replace(/\s+/g, "-"),
-        description: form.description || undefined,
-        image: form.image || undefined,
+      const categoryFields = {
+        name,
+        slug,
+        image: form.images[0] || undefined,
+        images: form.images,
         featured: form.featured,
-      });
-      toast.success("Category created!");
-      setOpen(false);
-      setForm({ name: "", slug: "", description: "", image: "", featured: false });
-    } catch { toast.error("Failed to create category"); }
-    finally { setSaving(false); }
+      };
+      if (editingCategory) {
+        await updateCategory({
+          id: editingCategory._id,
+          ...categoryFields,
+          description: form.description.trim() || null,
+        });
+        toast.success("Category updated!");
+      } else {
+        await createCategory({
+          ...categoryFields,
+          description: form.description.trim() || undefined,
+        });
+        toast.success("Category created!");
+      }
+      resetForm();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save category");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (categories === undefined) return <Skeleton className="h-48 w-full" />;
 
   return (
     <div className="space-y-4">
-      {!open ? (
-        <NeonButton onClick={() => setOpen(true)} variant="blue">
+      {!formOpen && (
+        <NeonButton
+          onClick={() => {
+            setEditingCategory(null);
+            setForm({ name: "", slug: "", description: "", images: [], featured: false });
+            setFormOpen(true);
+          }}
+          variant="blue"
+        >
           <Plus className="w-4 h-4" /> Add Category
         </NeonButton>
-      ) : (
+      )}
+      {formOpen && (
         <GlassCard glow="blue" className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-black uppercase tracking-widest text-sm">Add Category</h3>
-            <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground cursor-pointer"><X className="w-4 h-4" /></button>
+            <h3 className="font-black uppercase tracking-widest text-sm">
+              {editingCategory ? "Edit Category" : "Add Category"}
+            </h3>
+            <button
+              type="button"
+              onClick={resetForm}
+              className="text-muted-foreground hover:text-foreground cursor-pointer"
+              aria-label="Close category form"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[
-              { name: "name", label: "Name *", placeholder: "Streetwear" },
-              { name: "slug", label: "Slug (auto)", placeholder: "streetwear" },
-              { name: "image", label: "Image URL", placeholder: "https://...", col: 2 },
-              { name: "description", label: "Description", placeholder: "Category description", col: 2 },
-            ].map(({ name, label, placeholder, col }) => (
-              <div key={name} className={col === 2 ? "md:col-span-2" : ""}>
-                <label className="text-xs uppercase tracking-widest text-muted-foreground mb-1 block">{label}</label>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs uppercase tracking-widest text-muted-foreground mb-1 block">Name *</label>
                 <input
-                  placeholder={placeholder}
-                  value={form[name as keyof typeof form] as string}
-                  onChange={(e) => setForm((p) => ({ ...p, [name]: e.target.value }))}
+                  required
+                  placeholder="Streetwear"
+                  value={form.name}
+                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                   className="w-full bg-secondary border border-border rounded-sm px-3 py-2 text-sm text-foreground placeholder-muted-foreground outline-none focus:border-primary transition-all"
                 />
               </div>
-            ))}
-            <div className="md:col-span-2 flex items-center gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.featured} onChange={(e) => setForm((p) => ({ ...p, featured: e.target.checked }))} className="accent-primary" />
-                <span className="text-xs uppercase tracking-widest text-muted-foreground">Featured</span>
-              </label>
+              <div>
+                <label className="text-xs uppercase tracking-widest text-muted-foreground mb-1 block">Slug</label>
+                <input
+                  placeholder="Auto-generated from name"
+                  value={form.slug}
+                  onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value }))}
+                  className="w-full bg-secondary border border-border rounded-sm px-3 py-2 text-sm text-foreground placeholder-muted-foreground outline-none focus:border-primary transition-all"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-xs uppercase tracking-widest text-muted-foreground mb-1 block">Description</label>
+                <textarea
+                  placeholder="Category description"
+                  value={form.description}
+                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                  rows={3}
+                  className="w-full bg-secondary border border-border rounded-sm px-3 py-2 text-sm text-foreground placeholder-muted-foreground outline-none focus:border-primary transition-all resize-none"
+                />
+              </div>
             </div>
-            <div className="md:col-span-2 flex gap-3">
-              <NeonButton type="submit" variant="purple" disabled={saving}>{saving ? "Creating..." : "Create"}</NeonButton>
-              <NeonButton type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</NeonButton>
+            <div>
+              <label className="text-xs uppercase tracking-widest text-muted-foreground mb-2 block">Category Images</label>
+              <AdminImageUploader
+                value={form.images}
+                onChange={(images) => setForm((p) => ({ ...p, images }))}
+                maxImages={8}
+              />
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.featured}
+                onChange={(e) => setForm((p) => ({ ...p, featured: e.target.checked }))}
+                className="accent-primary"
+              />
+              <span className="text-xs uppercase tracking-widest text-muted-foreground">Featured</span>
+            </label>
+            <div className="flex gap-3">
+              <NeonButton type="submit" variant="purple" disabled={saving}>
+                {saving ? "Saving..." : editingCategory ? "Save Changes" : "Create Category"}
+              </NeonButton>
+              <NeonButton type="button" variant="ghost" onClick={resetForm}>Cancel</NeonButton>
             </div>
           </form>
         </GlassCard>
@@ -708,28 +807,49 @@ function CategoriesTab() {
         {categories.map((cat, i) => (
           <motion.div key={cat._id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <GlassCard className="overflow-hidden pt-0">
-              {cat.image && <img src={cat.image} alt={cat.name} className="w-full h-32 object-cover rounded-t-xl" />}
+              {(cat.images?.[0] || cat.image) && <img src={cat.images?.[0] || cat.image} alt={cat.name} className="w-full h-32 object-cover rounded-t-xl" />}
               <div className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-bold">{cat.name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{cat.slug}</p>
                     {cat.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{cat.description}</p>}
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {cat.images?.length ?? (cat.image ? 1 : 0)} image(s)
+                    </p>
                   </div>
                   {cat.featured && (
                     <span className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded-sm shrink-0">Featured</span>
                   )}
                 </div>
-                <button
-                  onClick={async () => {
-                    if (!confirm("Delete this category?")) return;
-                    try { await removeCategory({ id: cat._id }); toast.success("Category deleted"); }
-                    catch { toast.error("Failed to delete"); }
-                  }}
-                  className="mt-3 flex items-center gap-1 px-3 py-1.5 text-xs text-destructive border border-destructive/30 rounded-sm hover:bg-destructive/10 transition-all cursor-pointer"
-                >
-                  <Trash2 className="w-3 h-3" /> Delete
-                </button>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setEditingCategory(cat);
+                      setForm({
+                        name: cat.name,
+                        slug: cat.slug,
+                        description: cat.description ?? "",
+                        images: cat.images?.length ? cat.images : cat.image ? [cat.image] : [],
+                        featured: cat.featured,
+                      });
+                      setFormOpen(true);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-accent border border-accent/30 rounded-sm hover:bg-accent/10 transition-all cursor-pointer"
+                  >
+                    <Edit2 className="w-3 h-3" /> Edit
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("Delete this category?")) return;
+                      try { await removeCategory({ id: cat._id }); toast.success("Category deleted"); }
+                      catch { toast.error("Failed to delete"); }
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-destructive border border-destructive/30 rounded-sm hover:bg-destructive/10 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3" /> Delete
+                  </button>
+                </div>
               </div>
             </GlassCard>
           </motion.div>

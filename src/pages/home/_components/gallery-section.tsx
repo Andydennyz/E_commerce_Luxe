@@ -74,7 +74,7 @@ export default function GallerySection() {
       </div>
 
       <div className="text-center mt-10">
-        <Link to="/shop">
+        <Link to="/collections">
           <NeonButton variant="ghost">
             Explore Full Collection <ArrowRight className="w-4 h-4" />
           </NeonButton>

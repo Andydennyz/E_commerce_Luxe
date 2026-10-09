@@ -114,7 +114,7 @@ export default function HeroSection() {
                 Shop Now <ArrowRight className="w-5 h-5" />
               </NeonButton>
             </Link>
-            <Link to="/shop?collection=new">
+            <Link to="/shop?new=true">
               <NeonButton size="lg" variant="ghost">
                 New Arrivals <Sparkles className="w-5 h-5" />
               </NeonButton>

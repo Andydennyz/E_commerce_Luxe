@@ -18,6 +18,7 @@ export default defineSchema({
     slug: v.string(),
     description: v.optional(v.string()),
     image: v.optional(v.string()),
+    images: v.optional(v.array(v.string())),
     featured: v.boolean(),
   }).index("by_slug", ["slug"]),
 

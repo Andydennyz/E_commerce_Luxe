@@ -1,13 +1,21 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ShoppingCart, Search, Menu, X, Zap, LayoutDashboard } from "lucide-react";
+import {
+  ShoppingCart,
+  Search,
+  Menu,
+  X,
+  Zap,
+  LayoutDashboard,
+} from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import { useGuestCart } from "@/components/providers/guest-cart.tsx";
 
 const navLinks = [
+  { label: "Home", href: "/" },
   { label: "Shop", href: "/shop" },
-  { label: "Collections", href: "/shop?collection=new" },
+  { label: "Collections", href: "/collections" },
   { label: "Trending", href: "/shop?trending=true" },
   { label: "Lookbook", href: "/lookbook" },
   { label: "About", href: "/about" },
@@ -21,7 +29,8 @@ export default function Navbar() {
   const navigate = useNavigate();
 
   const { items: cartItems } = useGuestCart();
-  const cartCount = cartItems?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+  const cartCount =
+    cartItems?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -92,7 +101,10 @@ export default function Navbar() {
               </Link>
 
               {/* Cart */}
-              <Link to="/cart" className="relative p-2 text-muted-foreground hover:text-primary transition-colors">
+              <Link
+                to="/cart"
+                className="relative p-2 text-muted-foreground hover:text-primary transition-colors"
+              >
                 <ShoppingCart className="w-5 h-5" />
                 {cartCount > 0 && (
                   <motion.span
@@ -119,9 +131,24 @@ export default function Navbar() {
                 className="md:hidden p-2 text-muted-foreground hover:text-primary transition-colors cursor-pointer"
                 onClick={() => setMobileOpen(!mobileOpen)}
               >
-                {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                {mobileOpen ? (
+                  <X className="w-5 h-5" />
+                ) : (
+                  <Menu className="w-5 h-5" />
+                )}
               </button>
             </div>
+          </div>
+          <div className="md:hidden grid grid-cols-3 gap-x-3 gap-y-1 pb-3">
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                to={link.href}
+                className="py-1 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors"
+              >
+                {link.label}
+              </Link>
+            ))}
           </div>
         </div>
 
@@ -167,7 +194,9 @@ export default function Navbar() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[60] bg-background/90 backdrop-blur-xl flex items-start justify-center pt-32 px-4"
-            onClick={(e) => e.target === e.currentTarget && setSearchOpen(false)}
+            onClick={(e) =>
+              e.target === e.currentTarget && setSearchOpen(false)
+            }
           >
             <motion.form
               initial={{ y: -30, opacity: 0 }}
@@ -184,7 +213,10 @@ export default function Navbar() {
                   placeholder="Search for products..."
                   className="w-full bg-card/80 border border-primary/40 rounded-sm px-6 py-4 text-lg text-foreground placeholder-muted-foreground outline-none focus:border-primary focus:shadow-[0_0_30px_rgba(168,85,247,0.3)] transition-all"
                 />
-                <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer">
+                <button
+                  type="submit"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer"
+                >
                   <Search className="w-5 h-5 text-primary" />
                 </button>
               </div>

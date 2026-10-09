@@ -7,7 +7,7 @@ const footerLinks = {
   Shop: [
     { label: "New Arrivals", href: "/shop?new=true" },
     { label: "Trending", href: "/shop?trending=true" },
-    { label: "Collections", href: "/shop" },
+    { label: "Collections", href: "/collections" },
     { label: "Sale", href: "/shop?sale=true" },
   ],
   Support: [

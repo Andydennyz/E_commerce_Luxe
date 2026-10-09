@@ -16,6 +16,7 @@ const AdminPage = lazy(() => import("./pages/admin/page.tsx"));
 const SearchPage = lazy(() => import("./pages/search/page.tsx"));
 const AboutPage = lazy(() => import("./pages/about/page.tsx"));
 const LookbookPage = lazy(() => import("./pages/lookbook/page.tsx"));
+const CollectionsPage = lazy(() => import("./pages/collections/page.tsx"));
 
 function PageLoader() {
   return (
@@ -38,6 +39,14 @@ export default function App() {
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route element={<AppLayout />}>
             <Route path="/" element={<Index />} />
+            <Route
+              path="/collections"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <CollectionsPage />
+                </Suspense>
+              }
+            />
             <Route
               path="/shop"
               element={

@@ -140,6 +140,7 @@ export const update = mutation({
     description: v.optional(v.string()),
     price: v.optional(v.number()),
     comparePrice: v.optional(v.number()),
+    categoryId: v.optional(v.id("categories")),
     stock: v.optional(v.number()),
     featured: v.optional(v.boolean()),
     trending: v.optional(v.boolean()),
