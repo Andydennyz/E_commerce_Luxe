@@ -11,11 +11,13 @@ import NeonButton from "@/components/neon-button.tsx";
 import GlassCard from "@/components/glass-card.tsx";
 import { cn } from "@/lib/utils.ts";
 import { useState } from "react";
+import { useGuestCart } from "@/components/providers/guest-cart.tsx";
 
 function WishlistContent() {
   const wishlist = useQuery(api.wishlist.getWishlist);
   const toggleWishlist = useMutation(api.wishlist.toggleWishlist);
-  const addToCart = useMutation(api.cart.addToCart);
+  const recordCartAddition = useMutation(api.userActivity.recordCartAddition);
+  const { addItem } = useGuestCart();
   const [movingId, setMovingId] = useState<string | null>(null);
 
   if (wishlist === undefined) {
@@ -68,16 +70,33 @@ function WishlistContent() {
     if (!item.product) return;
     setMovingId(item._id);
     try {
-      await addToCart({
+      const size = item.product.sizes[0] ?? "M";
+      const color = item.product.colors[0] ?? "Default";
+      await recordCartAddition({
         productId: item.product._id,
         quantity: 1,
-        size: item.product.sizes[0] ?? "M",
-        color: item.product.colors[0] ?? "Default",
+        size,
+        color,
       });
+      addItem(
+        item.product,
+        1,
+        size,
+        color,
+      );
+    } catch (error) {
+      console.error("Failed to add wishlist product to cart:", error);
+      toast.error("Failed to add product to cart");
+      setMovingId(null);
+      return;
+    }
+
+    try {
       await toggleWishlist({ productId: item.product._id });
       toast.success("Moved to cart!");
-    } catch {
-      toast.error("Failed to move to cart");
+    } catch (error) {
+      console.error("Failed to remove moved product from wishlist:", error);
+      toast.error("Product added to cart but could not be removed from wishlist");
     } finally {
       setMovingId(null);
     }

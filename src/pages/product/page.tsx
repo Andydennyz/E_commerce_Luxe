@@ -7,7 +7,7 @@ import {
   ShoppingCart, Heart, Star, ArrowLeft, ZoomIn, X,
   Truck, Shield, RotateCcw, Share2, CheckCircle,
 } from "lucide-react";
-import { Authenticated } from "convex/react";
+import { Authenticated, Unauthenticated } from "convex/react";
 import { toast } from "sonner";
 import NeonButton from "@/components/neon-button.tsx";
 import ProductCard from "@/components/product-card.tsx";
@@ -15,6 +15,8 @@ import GlassCard from "@/components/glass-card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
 import { useGuestCart } from "@/components/providers/guest-cart.tsx";
+import { useRequireAuth } from "@/hooks/use-require-auth.ts";
+import { SignInButton } from "@/components/ui/signin.tsx";
 
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -25,6 +27,8 @@ export default function ProductPage() {
   const isWishlisted = useQuery(api.wishlist.isInWishlist, product ? { productId: product._id } : "skip");
 
   const { addItem } = useGuestCart();
+  const { requireAuth } = useRequireAuth();
+  const recordCartAddition = useMutation(api.userActivity.recordCartAddition);
   const toggleWishlist = useMutation(api.wishlist.toggleWishlist);
   const addReview = useMutation(api.reviews.addReview);
 
@@ -75,6 +79,7 @@ export default function ProductPage() {
   }
 
   const handleAddToCart = async () => {
+    if (!(await requireAuth("add items to your cart"))) return;
     try {
       if (customMode) {
         const attributes = customAttributes
@@ -84,10 +89,22 @@ export default function ProductPage() {
           toast.error("Please complete each custom attribute");
           return;
         }
+        await recordCartAddition({
+          productId: product._id,
+          quantity,
+          size: "Custom",
+          color: "Custom",
+        });
         addItem(product, quantity, "Custom", "Custom", attributes);
       } else {
         if (product.sizes.length > 0 && !selectedSize) { toast.error("Please select a size"); return; }
         if (product.colors.length > 0 && !selectedColor) { toast.error("Please select a color"); return; }
+        await recordCartAddition({
+          productId: product._id,
+          quantity,
+          size: selectedSize ?? "N/A",
+          color: selectedColor ?? "N/A",
+        });
         addItem(product, quantity, selectedSize ?? "N/A", selectedColor ?? "N/A");
       }
       setAddedToCart(true);
@@ -97,6 +114,7 @@ export default function ProductPage() {
   };
 
   const handleWishlist = async () => {
+    if (!(await requireAuth("add items to your wishlist"))) return;
     try {
       const added = await toggleWishlist({ productId: product._id });
       toast.success(added ? "Added to wishlist" : "Removed from wishlist");
@@ -410,8 +428,7 @@ export default function ProductPage() {
                   <><ShoppingCart className="w-5 h-5" /> Add to Cart</>
                 )}
               </NeonButton>
-              <Authenticated>
-                <button
+              <button
                   onClick={handleWishlist}
                   className={cn(
                     "p-3 rounded-sm border transition-all cursor-pointer flex-shrink-0",
@@ -421,8 +438,7 @@ export default function ProductPage() {
                   )}
                 >
                   <Heart className={cn("w-5 h-5", isWishlisted && "fill-current")} />
-                </button>
-              </Authenticated>
+              </button>
             </div>
 
             {/* Trust badges */}
@@ -570,6 +586,15 @@ export default function ProductPage() {
               </GlassCard>
               )}
             </Authenticated>
+            <Unauthenticated>
+              <GlassCard className="p-6 space-y-3 h-fit">
+                <h3 className="font-bold uppercase tracking-wider text-sm">Write a Review</h3>
+                <p className="text-sm text-muted-foreground">
+                  Sign in to share your experience with this product.
+                </p>
+                <SignInButton className="w-full" />
+              </GlassCard>
+            </Unauthenticated>
           </div>
         </div>
 

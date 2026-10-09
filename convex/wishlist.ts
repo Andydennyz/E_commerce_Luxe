@@ -47,7 +47,19 @@ export const toggleWishlist = mutation({
       await ctx.db.delete(existing._id);
       return false;
     } else {
+      const product = await ctx.db.get(args.productId);
+      if (!product) throw new Error("Product not found");
       await ctx.db.insert("wishlist", { userId: user._id, productId: args.productId });
+      await ctx.db.insert("userActivity", {
+        userId: user._id,
+        type: "wishlist_added",
+        productId: product._id,
+        productName: product.name,
+        productSlug: product.slug,
+        productImage: product.images[0] ?? "",
+        price: product.price,
+        quantity: 1,
+      });
       return true;
     }
   },

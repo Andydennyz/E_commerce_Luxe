@@ -27,6 +27,8 @@ import {
   BarChart3,
   Video,
   LogOut,
+  Gift,
+  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import NeonButton from "@/components/neon-button.tsx";
@@ -42,8 +44,9 @@ import {
 } from "recharts";
 import AdminImageUploader from "@/components/admin-image-uploader.tsx";
 import VideosTab from "./_components/videos-tab.tsx";
+import AboutSocialsTab from "./_components/about-socials-tab.tsx";
 
-type AdminTab = "dashboard" | "orders" | "products" | "users" | "categories" | "videos";
+type AdminTab = "dashboard" | "orders" | "products" | "users" | "categories" | "videos" | "referrals" | "about";
 
 const ORDER_STATUSES = [
   "pending",
@@ -931,6 +934,84 @@ function UsersTab() {
   );
 }
 
+function ReferralsTab() {
+  const redemptions = usePaginatedQuery(
+    api.referrals.listAdminRedemptions,
+    {},
+    { initialNumItems: 20 },
+  );
+
+  if (redemptions.status === "LoadingFirstPage") {
+    return <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground">
+        {redemptions.results.length} referral redemption{redemptions.results.length === 1 ? "" : "s"} loaded
+      </p>
+      {redemptions.results.length === 0 ? (
+        <GlassCard className="p-6 text-sm text-muted-foreground">
+          No referral codes have been redeemed yet.
+        </GlassCard>
+      ) : (
+        <div className="space-y-3">
+          {redemptions.results.map((entry) => (
+            <GlassCard key={entry.id} className="p-4 md:p-5">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div className="space-y-2 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono font-bold text-primary">{entry.code}</span>
+                    <span className="text-xs px-2 py-0.5 border border-accent/30 bg-accent/10 text-accent rounded-sm">
+                      10% · Ksh {entry.discount.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Referrer: <span className="text-foreground">{entry.referrerName ?? "Unknown"}</span>
+                    {entry.referrerEmail && ` · ${entry.referrerEmail}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    New customer: <span className="text-foreground">{entry.newCustomerName ?? "Unknown"}</span>
+                    {entry.newCustomerEmail && ` · ${entry.newCustomerEmail}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Intl.DateTimeFormat(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }).format(entry.createdAt)}
+                  </p>
+                </div>
+                <div className="text-sm md:text-right">
+                  <p className="font-semibold">
+                    Order {entry.orderStatus ?? "unavailable"}
+                    {entry.paymentStatus && ` · ${entry.paymentStatus}`}
+                  </p>
+                  <p className="mt-1 text-primary font-black">
+                    {entry.orderTotal === null ? "—" : `Ksh ${entry.orderTotal.toFixed(2)}`}
+                  </p>
+                  <p className="mt-1 font-mono text-[10px] text-muted-foreground break-all">
+                    {entry.orderId}
+                  </p>
+                </div>
+              </div>
+            </GlassCard>
+          ))}
+        </div>
+      )}
+      {redemptions.status !== "Exhausted" && (
+        <button
+          type="button"
+          onClick={() => redemptions.loadMore(20)}
+          disabled={redemptions.status === "LoadingMore"}
+          className="px-5 py-2.5 border border-primary/40 rounded-sm text-xs uppercase tracking-widest text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50"
+        >
+          {redemptions.status === "LoadingMore" ? "Loading..." : "Load More Redemptions"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* ─── MAIN ADMIN ─────────────────────────────────────────────── */
 function AdminContent() {
   const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
@@ -942,7 +1023,9 @@ function AdminContent() {
     { id: "products", label: "Products", icon: Package },
     { id: "categories", label: "Categories", icon: Tag },
     { id: "videos", label: "Videos", icon: Video },
+    { id: "about", label: "About & Socials", icon: Globe },
     { id: "users", label: "Users", icon: Users },
+    { id: "referrals", label: "Referrals", icon: Gift },
   ];
 
   const handleSignOut = async () => {
@@ -999,7 +1082,9 @@ function AdminContent() {
             {activeTab === "products" && <ProductsTab />}
             {activeTab === "categories" && <CategoriesTab />}
             {activeTab === "videos" && <VideosTab />}
+            {activeTab === "about" && <AboutSocialsTab />}
             {activeTab === "users" && <UsersTab />}
+            {activeTab === "referrals" && <ReferralsTab />}
           </motion.div>
         </AnimatePresence>
       </div>

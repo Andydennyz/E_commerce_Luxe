@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel.d.ts";
 
@@ -37,15 +38,28 @@ export const handleCallback = internalMutation({
     );
     if (!order) return;
 
-    if (args.resultCode === 0) {
+    if (
+      args.resultCode === 0 &&
+      order.paymentStatus === "pending" &&
+      order.status === "pending"
+    ) {
       await ctx.db.patch(order._id as Id<"orders">, {
         paymentStatus: "paid",
         status: "confirmed",
         mpesaReceiptNumber: args.receiptNumber,
       });
-    } else {
+      await ctx.runMutation(internal.referrals.completeRedemption, {
+        orderId: order._id,
+      });
+    } else if (
+      order.paymentStatus === "pending" &&
+      order.status === "pending"
+    ) {
       await ctx.db.patch(order._id as Id<"orders">, {
         paymentStatus: "failed",
+      });
+      await ctx.runMutation(internal.referrals.releaseReservation, {
+        orderId: order._id,
       });
     }
   },

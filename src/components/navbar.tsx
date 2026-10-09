@@ -3,12 +3,15 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ShoppingCart,
+  Heart,
   Search,
   Menu,
   X,
   Zap,
   LayoutDashboard,
+  UserRound,
 } from "lucide-react";
+import { Authenticated } from "convex/react";
 import { cn } from "@/lib/utils.ts";
 import { useGuestCart } from "@/components/providers/guest-cart.tsx";
 
@@ -16,7 +19,9 @@ const navLinks = [
   { label: "Home", href: "/" },
   { label: "Shop", href: "/shop" },
   { label: "Collections", href: "/collections" },
-  { label: "Trending", href: "/shop?trending=true" },
+  { label: "Featured", href: "/featured" },
+  { label: "Trending", href: "/trending" },
+  { label: "New Arrivals", href: "/new-arrivals" },
   { label: "Lookbook", href: "/lookbook" },
   { label: "About", href: "/about" },
 ];
@@ -102,6 +107,15 @@ export default function Navbar() {
 
               {/* Cart */}
               <Link
+                to="/wishlist"
+                className="p-2 text-muted-foreground hover:text-primary transition-colors"
+                title="Wishlist"
+                aria-label="Wishlist"
+              >
+                <Heart className="w-5 h-5" />
+              </Link>
+
+              <Link
                 to="/cart"
                 className="relative p-2 text-muted-foreground hover:text-primary transition-colors"
               >
@@ -116,6 +130,17 @@ export default function Navbar() {
                   </motion.span>
                 )}
               </Link>
+
+              <Authenticated>
+                <Link
+                  to="/dashboard"
+                  className="p-2 text-muted-foreground hover:text-primary transition-colors"
+                  title="Your dashboard"
+                  aria-label="Your dashboard"
+                >
+                  <UserRound className="w-5 h-5" />
+                </Link>
+              </Authenticated>
 
               <Link
                 to="/admin"

@@ -1,15 +1,18 @@
-import { useMutation, useAction } from "convex/react";
+import { useMutation, useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import NeonButton from "@/components/neon-button.tsx";
 import GlassCard from "@/components/glass-card.tsx";
-import { Smartphone, CreditCard, ArrowRight, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Smartphone, CreditCard, ArrowRight, CheckCircle2, XCircle, Loader2, Tag } from "lucide-react";
 import { cn } from "@/lib/utils.ts";
 import type { Id } from "@/convex/_generated/dataModel.d.ts";
 import { useGuestCart } from "@/components/providers/guest-cart.tsx";
+import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
+import { SignInButton } from "@/components/ui/signin.tsx";
+import { Skeleton } from "@/components/ui/skeleton.tsx";
 
 const DELIVERY_FEE = 9.99;
 const POLL_INTERVAL_MS = 4000;
@@ -182,6 +185,14 @@ function CheckoutContent() {
   const queryStkStatus = useAction(api.mpesa.queryStkStatus);
   const initializePaystack = useAction(api.paystack.initializeTransaction);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const promoCode = searchParams.get("promo")?.trim().toUpperCase() || undefined;
+  const isReferralPromo =
+    !!promoCode && promoCode !== "CYBER40" && promoCode !== "PD20";
+  const referralCheck = useQuery(
+    api.referrals.checkCode,
+    isReferralPromo && promoCode ? { code: promoCode } : "skip",
+  );
 
   const [form, setForm] = useState({
     fullName: "", phone: "", location: "", destination: "",
@@ -204,7 +215,16 @@ function CheckoutContent() {
     (sum, item) => sum + (item.product?.price ?? 0) * item.quantity,
     0,
   );
-  const total = subtotal + DELIVERY_FEE;
+  const promoPercent =
+    promoCode === "CYBER40"
+      ? 0.1
+      : promoCode === "PD20"
+        ? 0.2
+        : referralCheck?.valid
+          ? referralCheck.discountPercent / 100
+          : 0;
+  const promoDiscount = Math.round(subtotal * promoPercent * 100) / 100;
+  const total = subtotal - promoDiscount + DELIVERY_FEE;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -282,6 +302,7 @@ function CheckoutContent() {
         paymentMethod,
         shippingAddress: form,
         items,
+        ...(promoCode ? { promoCode } : {}),
       });
       setCurrentOrderId(order.orderId);
       setCapturedTotal(order.total);
@@ -487,6 +508,15 @@ function CheckoutContent() {
                   <span className="text-muted-foreground">Subtotal</span>
                   <span>Ksh {subtotal.toFixed(2)}</span>
                 </div>
+                {promoCode && promoPercent > 0 && (
+                  <div className="flex justify-between text-[oklch(0.72_0.2_330)]">
+                    <span className="flex items-center gap-1">
+                      <Tag className="w-3 h-3" />
+                      {promoCode} ({promoPercent * 100}% off)
+                    </span>
+                    <span>-Ksh {promoDiscount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Delivery</span>
                   <span>Ksh {DELIVERY_FEE.toFixed(2)}</span>
@@ -496,7 +526,16 @@ function CheckoutContent() {
                   <span className="text-primary">Ksh {total.toFixed(2)}</span>
                 </div>
               </div>
-              <NeonButton type="submit" fullWidth disabled={loading}>
+              {isReferralPromo && referralCheck && !referralCheck.valid && (
+                <p className="text-xs text-destructive" role="alert">
+                  {referralCheck.reason}
+                </p>
+              )}
+              <NeonButton
+                type="submit"
+                fullWidth
+                disabled={loading || (isReferralPromo && referralCheck?.valid !== true)}
+              >
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -530,7 +569,23 @@ export default function CheckoutPage() {
         >
           Checkout
         </h1>
-        <CheckoutContent />
+        <AuthLoading>
+          <Skeleton className="h-96 w-full" />
+        </AuthLoading>
+        <Authenticated>
+          <CheckoutContent />
+        </Authenticated>
+        <Unauthenticated>
+          <div className="max-w-lg mx-auto text-center space-y-5 py-16">
+            <h2 className="text-2xl font-black uppercase" style={{ fontFamily: "Orbitron, sans-serif" }}>
+              Sign In to Checkout
+            </h2>
+            <p className="text-muted-foreground">
+              Sign in to place an order and complete your purchase.
+            </p>
+            <SignInButton className="mx-auto" />
+          </div>
+        </Unauthenticated>
       </div>
     </div>
   );

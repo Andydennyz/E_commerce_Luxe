@@ -1,44 +1,21 @@
 import { motion } from "motion/react";
 import { Link } from "react-router-dom";
 import { Zap, Shield, RefreshCw, Globe, ArrowRight, Star } from "lucide-react";
+import { useQuery } from "convex/react";
 import GlassCard from "@/components/glass-card.tsx";
-
-const TEAM = [
-  {
-    name: "Priya Doshi",
-    role: "Founder & Creative Director",
-    bio: "Visionary behind PD Stores, blending high fashion with tech culture.",
-    avatar: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=200&h=200&fit=crop",
-  },
-  {
-    name: "Kai Nakamura",
-    role: "Head of Design",
-    bio: "Crafts every visual experience with precision and purpose.",
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&h=200&fit=crop",
-  },
-  {
-    name: "Aisha Okonkwo",
-    role: "Product Curator",
-    bio: "Identifies emerging trends before they hit the mainstream.",
-    avatar: "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&h=200&fit=crop",
-  },
-];
-
-const VALUES = [
-  { icon: Zap, title: "Bold by Design", desc: "We push boundaries with every collection, never settling for ordinary." },
-  { icon: Shield, title: "Quality First", desc: "Every product is vetted for materials, craftsmanship, and longevity." },
-  { icon: RefreshCw, title: "Sustainable Future", desc: "Conscious sourcing and packaging that respects the planet." },
-  { icon: Globe, title: "Global Community", desc: "Connecting fashion-forward minds across continents." },
-];
-
-const STATS = [
-  { value: "50K+", label: "Happy Customers" },
-  { value: "200+", label: "Unique Products" },
-  { value: "40+", label: "Countries Served" },
-  { value: "4.9★", label: "Average Rating" },
-];
+import { api } from "@/convex/_generated/api.js";
+import { DEFAULT_ABOUT_CONTENT, DEFAULT_TEAM_MEMBERS } from "@/lib/about-defaults.ts";
 
 export default function AboutPage() {
+  const storedContent = useQuery(api.about.getContent);
+  const storedTeam = useQuery(api.about.listTeamMembers);
+  const aboutContent = storedContent?.content;
+  const content = { ...DEFAULT_ABOUT_CONTENT, ...aboutContent };
+  const team = storedContent?.teamInitialized
+    ? storedTeam ?? []
+    : DEFAULT_TEAM_MEMBERS.map((member, order) => ({ ...member, order }));
+  const valueIcons = [Zap, Shield, RefreshCw, Globe];
+
   return (
     <div className="pt-20 min-h-screen">
       {/* Hero */}
@@ -51,7 +28,7 @@ export default function AboutPage() {
             animate={{ opacity: 1, y: 0 }}
             className="text-xs uppercase tracking-[0.4em] text-primary font-semibold mb-4"
           >
-            Est. 2024
+            {content.heroEyebrow}
           </motion.p>
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
@@ -60,9 +37,9 @@ export default function AboutPage() {
             className="text-5xl md:text-7xl font-black uppercase leading-none mb-6"
             style={{ fontFamily: "Orbitron, sans-serif" }}
           >
-            Wear the{" "}
+            {content.heroTitle}{" "}
             <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Future
+              {content.heroAccent}
             </span>
           </motion.h1>
           <motion.p
@@ -71,8 +48,7 @@ export default function AboutPage() {
             transition={{ delay: 0.2 }}
             className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed"
           >
-            PD Stores is more than a clothing brand — it&apos;s a cultural movement. We create
-            garments for those who live at the intersection of fashion, technology, and rebellion.
+            {content.heroIntro}
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -94,7 +70,7 @@ export default function AboutPage() {
       <section className="py-12 border-y border-border/50 bg-card/30">
         <div className="max-w-5xl mx-auto px-4 md:px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            {STATS.map((stat, i) => (
+            {content.stats.map((stat, i) => (
               <motion.div
                 key={stat.label}
                 initial={{ opacity: 0, y: 16 }}
@@ -124,27 +100,22 @@ export default function AboutPage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <p className="text-xs uppercase tracking-[0.4em] text-primary font-semibold mb-3">Our Story</p>
+            <p className="text-xs uppercase tracking-[0.4em] text-primary font-semibold mb-3">{content.storyEyebrow}</p>
             <h2
               className="text-3xl md:text-4xl font-black uppercase mb-6 leading-tight"
               style={{ fontFamily: "Orbitron, sans-serif" }}
             >
-              Born from the<br />Digital Underground
+              {content.storyTitle.split("\n").map((line, index) => (
+                <span key={`${line}-${index}`}>
+                  {index > 0 && <br />}
+                  {line}
+                </span>
+              ))}
             </h2>
             <div className="space-y-4 text-muted-foreground leading-relaxed">
-              <p>
-                PD Stores was born in 2024 from a simple frustration: fashion that spoke the
-                language of the digital generation didn&apos;t exist — so we built it.
-              </p>
-              <p>
-                Our collections draw from cyber aesthetics, streetwear culture, and high-end
-                craftsmanship. Each piece is designed to make a statement — not just about what
-                you wear, but who you are.
-              </p>
-              <p>
-                Today we serve customers across 40+ countries, with a community of rebels,
-                creators, and dreamers who believe clothes are armor.
-              </p>
+              {content.storyParagraphs.map((paragraph, index) => (
+                <p key={`${index}-${paragraph}`}>{paragraph}</p>
+              ))}
             </div>
           </motion.div>
           <motion.div
@@ -156,7 +127,7 @@ export default function AboutPage() {
           >
             <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-accent/20 rounded-md blur-xl" />
             <img
-              src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=600&fit=crop"
+              src={aboutContent?.storyImageUrl ?? "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=600&fit=crop"}
               alt="PD Stores studio"
               className="relative w-full aspect-square object-cover rounded-md border border-border/50"
             />
@@ -172,9 +143,11 @@ export default function AboutPage() {
             <h2 className="text-3xl font-black uppercase" style={{ fontFamily: "Orbitron, sans-serif" }}>Our Values</h2>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-            {VALUES.map(({ icon: Icon, title, desc }, i) => (
+            {content.values.map(({ title, description }, i) => {
+              const Icon = valueIcons[i % valueIcons.length];
+              return (
               <motion.div
-                key={title}
+                key={`${i}-${title}`}
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
@@ -185,10 +158,11 @@ export default function AboutPage() {
                     <Icon className="w-5 h-5 text-primary" />
                   </div>
                   <p className="font-bold uppercase tracking-wider text-sm">{title}</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
                 </GlassCard>
               </motion.div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -201,33 +175,46 @@ export default function AboutPage() {
             <h2 className="text-3xl font-black uppercase" style={{ fontFamily: "Orbitron, sans-serif" }}>Meet the Team</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            {TEAM.map((member, i) => (
-              <motion.div
-                key={member.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-              >
-                <GlassCard glow={i === 0 ? "purple" : i === 1 ? "blue" : "pink"} className="p-6 text-center space-y-4">
-                  <img
-                    src={member.avatar}
-                    alt={member.name}
-                    className="w-20 h-20 rounded-full border-2 border-primary/40 mx-auto object-cover shadow-[0_0_20px_rgba(168,85,247,0.3)]"
-                  />
-                  <div>
-                    <p className="font-black text-sm uppercase tracking-wider">{member.name}</p>
-                    <p className="text-xs text-primary mt-0.5">{member.role}</p>
-                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{member.bio}</p>
-                  </div>
-                  <div className="flex justify-center gap-0.5">
-                    {Array.from({ length: 5 }).map((_, j) => (
-                      <Star key={j} className="w-3 h-3 fill-[oklch(0.75_0.15_60)] text-[oklch(0.75_0.15_60)]" />
-                    ))}
-                  </div>
-                </GlassCard>
-              </motion.div>
-            ))}
+            {team.map((member, i) => {
+              const imageUrl =
+                member.imageUrl ?? DEFAULT_TEAM_MEMBERS[member.order]?.imageUrl;
+              return (
+                <motion.div
+                  key={member.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.1 }}
+                >
+                  <GlassCard glow={i === 0 ? "purple" : i === 1 ? "blue" : "pink"} className="p-6 text-center space-y-4">
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt={member.name}
+                        className="w-20 h-20 rounded-full border-2 border-primary/40 mx-auto object-cover shadow-[0_0_20px_rgba(168,85,247,0.3)]"
+                      />
+                    ) : (
+                      <div
+                        aria-label={`${member.name} photo`}
+                        className="w-20 h-20 rounded-full border-2 border-primary/40 mx-auto flex items-center justify-center bg-primary/10 text-primary text-2xl font-bold"
+                      >
+                        {member.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div>
+                      <p className="font-black text-sm uppercase tracking-wider">{member.name}</p>
+                      <p className="text-xs text-primary mt-0.5">{member.role}</p>
+                      <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{member.bio}</p>
+                    </div>
+                    <div className="flex justify-center gap-0.5">
+                      {Array.from({ length: 5 }).map((_, j) => (
+                        <Star key={j} className="w-3 h-3 fill-[oklch(0.75_0.15_60)] text-[oklch(0.75_0.15_60)]" />
+                      ))}
+                    </div>
+                  </GlassCard>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -236,10 +223,10 @@ export default function AboutPage() {
       <section className="py-20 border-t border-border/50 text-center">
         <div className="max-w-xl mx-auto px-4 space-y-6">
           <h2 className="text-3xl font-black uppercase" style={{ fontFamily: "Orbitron, sans-serif" }}>
-            Ready to Join the Movement?
+            {content.ctaTitle}
           </h2>
           <p className="text-muted-foreground">
-            Explore our latest collections and find pieces that define your identity.
+            {content.ctaDescription}
           </p>
           <Link
             to="/shop"

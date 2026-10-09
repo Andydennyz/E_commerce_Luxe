@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { isAuthorizedAdminUser } from "./adminAccess";
+import schema from "./schema";
 
 export const list = query({
   args: {
@@ -60,6 +61,15 @@ export const getById = query({
   args: { id: v.id("products") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
+  },
+});
+
+export const getByIds = query({
+  args: { ids: v.array(v.id("products")) },
+  returns: v.array(v.union(v.null(), schema.doc("products"))),
+  handler: async (ctx, args) => {
+    if (args.ids.length > 30) throw new Error("A shared cart can include at most 30 products");
+    return await Promise.all(args.ids.map((id) => ctx.db.get(id)));
   },
 });
 

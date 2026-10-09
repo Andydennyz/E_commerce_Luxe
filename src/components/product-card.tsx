@@ -3,11 +3,11 @@ import { motion } from "motion/react";
 import { Heart, ShoppingCart, Eye, Star } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api.js";
-import { Authenticated } from "convex/react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils.ts";
 import type { Doc } from "@/convex/_generated/dataModel.d.ts";
 import { useGuestCart } from "@/components/providers/guest-cart.tsx";
+import { useRequireAuth } from "@/hooks/use-require-auth.ts";
 
 interface ProductCardProps {
   product: Doc<"products">;
@@ -17,10 +17,12 @@ interface ProductCardProps {
 function WishlistButton({ productId }: { productId: Doc<"products">["_id"] }) {
   const isWishlisted = useQuery(api.wishlist.isInWishlist, { productId });
   const toggle = useMutation(api.wishlist.toggleWishlist);
+  const { requireAuth } = useRequireAuth();
 
   const handleToggle = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!(await requireAuth("add items to your wishlist"))) return;
     try {
       const added = await toggle({ productId });
       toast.success(added ? "Added to wishlist" : "Removed from wishlist");
@@ -46,12 +48,18 @@ function WishlistButton({ productId }: { productId: Doc<"products">["_id"] }) {
 
 export default function ProductCard({ product, className }: ProductCardProps) {
   const { addItem } = useGuestCart();
+  const { requireAuth } = useRequireAuth();
+  const recordCartAddition = useMutation(api.userActivity.recordCartAddition);
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!(await requireAuth("add items to your cart"))) return;
     try {
-      addItem(product, 1, product.sizes[0] ?? "M", product.colors[0] ?? "Default");
+      const size = product.sizes[0] ?? "M";
+      const color = product.colors[0] ?? "Default";
+      await recordCartAddition({ productId: product._id, quantity: 1, size, color });
+      addItem(product, 1, size, color);
       toast.success("Added to cart!");
     } catch {
       toast.error("Could not add this item to your cart");
@@ -103,9 +111,7 @@ export default function ProductCard({ product, className }: ProductCardProps) {
 
           {/* Actions - appear on hover */}
           <div className="absolute top-3 right-3 flex flex-col gap-2 translate-x-10 group-hover:translate-x-0 transition-transform duration-300">
-            <Authenticated>
-              <WishlistButton productId={product._id} />
-            </Authenticated>
+            <WishlistButton productId={product._id} />
             <Link
               to={`/product/${product.slug}`}
               onClick={(e) => e.stopPropagation()}

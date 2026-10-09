@@ -4,6 +4,7 @@ import { Loader2, LogIn, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@usehercules/auth/react";
 import { Button, buttonVariants } from "@/components/ui/button.tsx";
+import { storePostSignInPath } from "@/lib/auth-redirect.ts";
 
 export interface SignInButtonProps
   extends
@@ -81,6 +82,7 @@ export const SignInButton = forwardRef<HTMLButtonElement, SignInButtonProps>(
           if (isAuthenticated) {
             await signout();
           } else {
+            storePostSignInPath();
             await signin();
           }
         } catch (err) {

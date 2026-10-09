@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AuthCallback from "./pages/auth/Callback.tsx";
 import Index from "./pages/Index.tsx";
@@ -17,6 +17,11 @@ const SearchPage = lazy(() => import("./pages/search/page.tsx"));
 const AboutPage = lazy(() => import("./pages/about/page.tsx"));
 const LookbookPage = lazy(() => import("./pages/lookbook/page.tsx"));
 const CollectionsPage = lazy(() => import("./pages/collections/page.tsx"));
+const ProductCollectionPage = lazy(
+  () => import("./pages/product-collection/page.tsx"),
+);
+const WishlistPage = lazy(() => import("./pages/wishlist/page.tsx"));
+const DashboardPage = lazy(() => import("./pages/dashboard/page.tsx"));
 
 function PageLoader() {
   return (
@@ -56,6 +61,30 @@ export default function App() {
               }
             />
             <Route
+              path="/featured"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <ProductCollectionPage collection="featured" />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/trending"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <ProductCollectionPage collection="trending" />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/new-arrivals"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <ProductCollectionPage collection="newArrival" />
+                </Suspense>
+              }
+            />
+            <Route
               path="/product/:slug"
               element={
                 <Suspense fallback={<PageLoader />}>
@@ -87,8 +116,30 @@ export default function App() {
                 </Suspense>
               }
             />
-            <Route path="/profile" element={<Navigate to="/shop" replace />} />
-            <Route path="/wishlist" element={<Navigate to="/shop" replace />} />
+            <Route
+              path="/dashboard"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <DashboardPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <DashboardPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/wishlist"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <WishlistPage />
+                </Suspense>
+              }
+            />
             <Route
               path="/admin"
               element={

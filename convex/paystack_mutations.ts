@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
 // Save Paystack reference to order after initialization
@@ -48,6 +49,9 @@ export const confirmVerifiedPayment = internalMutation({
       paymentStatus: "paid",
       status: "confirmed",
     });
+    await ctx.runMutation(internal.referrals.completeRedemption, {
+      orderId: order._id,
+    });
   },
 });
 
@@ -79,6 +83,19 @@ export const handleWebhook = internalMutation({
       await ctx.db.patch(order._id, {
         paymentStatus: "paid",
         status: "confirmed",
+      });
+      await ctx.runMutation(internal.referrals.completeRedemption, {
+        orderId: order._id,
+      });
+    } else if (
+      (args.status === "failed" || args.status === "abandoned") &&
+      order.paymentMethod === "paystack" &&
+      order.paymentStatus === "pending" &&
+      order.status === "pending"
+    ) {
+      await ctx.db.patch(order._id, { paymentStatus: "failed" });
+      await ctx.runMutation(internal.referrals.releaseReservation, {
+        orderId: order._id,
       });
     }
   },

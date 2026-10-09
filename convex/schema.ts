@@ -63,6 +63,19 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_and_product", ["userId", "productId"]),
 
+  userActivity: defineTable({
+    userId: v.id("users"),
+    type: v.union(v.literal("cart_added"), v.literal("wishlist_added")),
+    productId: v.id("products"),
+    productName: v.string(),
+    productSlug: v.string(),
+    productImage: v.string(),
+    price: v.number(),
+    quantity: v.number(),
+    size: v.optional(v.string()),
+    color: v.optional(v.string()),
+  }).index("by_user", ["userId"]),
+
   coupons: defineTable({
     code: v.string(),
     discountType: v.union(v.literal("percentage"), v.literal("fixed")),
@@ -73,6 +86,25 @@ export default defineSchema({
     expiresAt: v.optional(v.string()),
     active: v.boolean(),
   }).index("by_code", ["code"]),
+
+  referralCodes: defineTable({
+    userId: v.id("users"),
+    code: v.string(),
+    reservedOrderId: v.optional(v.id("orders")),
+    redeemedBy: v.optional(v.id("users")),
+    redeemedOrderId: v.optional(v.id("orders")),
+    redeemedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_code", ["code"]),
+
+  referralRedemptions: defineTable({
+    code: v.string(),
+    referrerUserId: v.id("users"),
+    referredUserId: v.id("users"),
+    orderId: v.id("orders"),
+    discount: v.number(),
+  }),
 
   orders: defineTable({
     userId: v.optional(v.id("users")),
@@ -89,6 +121,7 @@ export default defineSchema({
     deliveryFee: v.number(),
     discount: v.number(),
     couponCode: v.optional(v.string()),
+    referralCodeId: v.optional(v.id("referralCodes")),
     paymentMethod: v.union(
       v.literal("stripe"),
       v.literal("mpesa"),
@@ -118,6 +151,7 @@ export default defineSchema({
     notes: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
+    .index("by_user_and_payment_status", ["userId", "paymentStatus"])
     .index("by_status", ["status"])
     .index("by_payment_status", ["paymentStatus"])
     .index("by_paystack_reference", ["paystackReference"]),
@@ -158,4 +192,61 @@ export default defineSchema({
     active: v.boolean(),
     order: v.number(),
   }).index("by_active", ["active"]),
+
+  aboutContent: defineTable({
+    key: v.string(),
+    heroEyebrow: v.string(),
+    heroTitle: v.string(),
+    heroAccent: v.string(),
+    heroIntro: v.string(),
+    storyEyebrow: v.string(),
+    storyTitle: v.string(),
+    storyParagraphs: v.array(v.string()),
+    storyImageStorageId: v.optional(v.id("_storage")),
+    stats: v.array(
+      v.object({
+        value: v.string(),
+        label: v.string(),
+      }),
+    ),
+    values: v.array(
+      v.object({
+        title: v.string(),
+        description: v.string(),
+      }),
+    ),
+    ctaTitle: v.string(),
+    ctaDescription: v.string(),
+  }).index("by_key", ["key"]),
+
+  aboutTeamMembers: defineTable({
+    name: v.string(),
+    role: v.string(),
+    bio: v.string(),
+    imageStorageId: v.optional(v.id("_storage")),
+    order: v.number(),
+  }).index("by_order", ["order"]),
+
+  aboutTeamState: defineTable({
+    key: v.string(),
+    teamInitialized: v.boolean(),
+  }).index("by_key", ["key"]),
+
+  aboutSocialLinks: defineTable({
+    platform: v.union(
+      v.literal("Instagram"),
+      v.literal("Facebook"),
+      v.literal("YouTube"),
+      v.literal("X"),
+      v.literal("TikTok"),
+      v.literal("LinkedIn"),
+      v.literal("Pinterest"),
+      v.literal("WhatsApp"),
+    ),
+    url: v.string(),
+    order: v.number(),
+    active: v.boolean(),
+  })
+    .index("by_platform", ["platform"])
+    .index("by_order", ["order"]),
 });

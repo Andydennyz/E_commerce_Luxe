@@ -1,5 +1,8 @@
 import { internalQuery, mutation, query } from "./_generated/server";
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v } from "convex/values";
+import type { Doc } from "./_generated/dataModel.d.ts";
+import schema from "./schema";
 import { isAuthorizedAdminUser } from "./adminAccess";
 
 export const createOrder = mutation({
@@ -22,16 +25,17 @@ export const createOrder = mutation({
         ),
       }),
     ),
+    promoCode: v.optional(v.string()),
   },
   returns: v.object({ orderId: v.id("orders"), total: v.number() }),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    const user = identity
-      ? await ctx.db
-          .query("users")
-          .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-          .unique()
-      : null;
+    if (!identity) throw new Error("Sign in before placing an order");
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user) throw new Error("User profile not found");
     const products = await Promise.all(
       args.items.map((item) => ctx.db.get(item.productId)),
     );
@@ -87,18 +91,60 @@ export const createOrder = mutation({
       0,
     );
     const deliveryFee = 9.99;
-    const total = subtotal + deliveryFee;
+    const promoCode = args.promoCode?.trim().toUpperCase() || undefined;
+    let discount = 0;
+    let referralCode: Doc<"referralCodes"> | null = null;
+
+    if (promoCode === "CYBER40") {
+      discount = Math.round(subtotal * 0.1 * 100) / 100;
+    } else if (promoCode === "PD20") {
+      discount = Math.round(subtotal * 0.2 * 100) / 100;
+    } else if (promoCode) {
+      referralCode = await ctx.db
+        .query("referralCodes")
+        .withIndex("by_code", (q) => q.eq("code", promoCode))
+        .unique();
+      if (
+        !referralCode ||
+        referralCode.redeemedBy ||
+        referralCode.reservedOrderId
+      ) {
+        throw new Error("Referral code is invalid or has already been used");
+      }
+      if (referralCode.userId === user._id) {
+        throw new Error("You cannot use your own referral code");
+      }
+      const previousOrder = await ctx.db
+        .query("orders")
+        .withIndex("by_user_and_payment_status", (q) =>
+          q.eq("userId", user._id).eq("paymentStatus", "paid"),
+        )
+        .first();
+      if (previousOrder) {
+        throw new Error("Referral discounts are for first-time customers");
+      }
+      discount = Math.round(subtotal * 0.1 * 100) / 100;
+    }
+    const total = subtotal - discount + deliveryFee;
     const orderId = await ctx.db.insert("orders", {
-      ...(user ? { userId: user._id } : {}),
+      userId: user._id,
       status: "pending",
       paymentStatus: "pending",
       paymentMethod: args.paymentMethod,
       subtotal,
       deliveryFee,
-      discount: 0,
+      discount,
+      ...(promoCode ? { couponCode: promoCode } : {}),
+      ...(referralCode ? { referralCodeId: referralCode._id } : {}),
       total,
       shippingAddress: args.shippingAddress,
     });
+
+    if (referralCode && promoCode) {
+      await ctx.db.patch(referralCode._id, {
+        reservedOrderId: orderId,
+      });
+    }
 
     await Promise.all(
       orderItems.map((item) => ctx.db.insert("orderItems", { orderId, ...item })),
@@ -229,6 +275,41 @@ export const getUserOrders = query({
   },
 });
 
+export const listMyOrders = query({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(
+    v.object({
+      order: schema.doc("orders"),
+      items: v.array(schema.doc("orderItems")),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const ordersPage = await ctx.db
+      .query("orders")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .order("desc")
+      .paginate(args.paginationOpts);
+    const page = await Promise.all(
+      ordersPage.page.map(async (order) => ({
+        order,
+        items: await ctx.db
+          .query("orderItems")
+          .withIndex("by_order", (q) => q.eq("orderId", order._id))
+          .take(100),
+      })),
+    );
+    return { ...ordersPage, page };
+  },
+});
+
 export const getAllOrders = query({
   args: {},
   handler: async (ctx) => {
@@ -292,6 +373,14 @@ export const updateOrderStatus = mutation({
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
     if (!isAuthorizedAdminUser(user, identity.email)) throw new Error("Forbidden");
+    const order = await ctx.db.get(args.orderId);
+    if (!order) throw new Error("Order not found");
+    if (args.status === "cancelled" && order.referralCodeId) {
+      const referralCode = await ctx.db.get(order.referralCodeId);
+      if (referralCode?.reservedOrderId === order._id) {
+        await ctx.db.patch(referralCode._id, { reservedOrderId: undefined });
+      }
+    }
     await ctx.db.patch(args.orderId, { status: args.status });
   },
 });

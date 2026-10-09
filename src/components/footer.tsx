@@ -1,12 +1,37 @@
 import { Link } from "react-router-dom";
-import { Zap, Mail, ArrowRight, AtSign, MessageCircle, PlayCircle } from "lucide-react";
+import {
+  Zap,
+  ArrowRight,
+  AtSign,
+  MessageCircle,
+  Users,
+  PlayCircle,
+  Video,
+  ShoppingBag,
+  Globe,
+} from "lucide-react";
 import { useState } from "react";
+import { useQuery } from "convex/react";
 import { toast } from "sonner";
+import { useRequireAuth } from "@/hooks/use-require-auth.ts";
+import { api } from "@/convex/_generated/api.js";
+
+const SOCIAL_ICONS = {
+  Instagram: AtSign,
+  Facebook: Users,
+  YouTube: PlayCircle,
+  X: Zap,
+  TikTok: Video,
+  LinkedIn: ShoppingBag,
+  Pinterest: Globe,
+  WhatsApp: MessageCircle,
+} as const;
 
 const footerLinks = {
   Shop: [
-    { label: "New Arrivals", href: "/shop?new=true" },
-    { label: "Trending", href: "/shop?trending=true" },
+    { label: "Featured", href: "/featured" },
+    { label: "New Arrivals", href: "/new-arrivals" },
+    { label: "Trending", href: "/trending" },
     { label: "Collections", href: "/collections" },
     { label: "Sale", href: "/shop?sale=true" },
   ],
@@ -26,9 +51,12 @@ const footerLinks = {
 
 export default function Footer() {
   const [email, setEmail] = useState("");
+  const { requireAuth } = useRequireAuth();
+  const socialLinks = useQuery(api.about.listSocialLinks);
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!(await requireAuth("subscribe"))) return;
     if (email) {
       toast.success("Subscribed! Welcome to the future of fashion.");
       setEmail("");
@@ -89,20 +117,23 @@ export default function Footer() {
               The future of fashion. Where cyberpunk aesthetics meet luxury streetwear.
             </p>
             <div className="flex gap-4">
-              {[
-                { Icon: AtSign, href: "#" },
-                { Icon: MessageCircle, href: "#" },
-                { Icon: PlayCircle, href: "#" },
-                { Icon: Mail, href: "#" },
-              ].map(({ Icon, href }, i) => (
-                <a
-                  key={i}
-                  href={href}
-                  className="w-9 h-9 rounded-sm border border-border/50 flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 hover:shadow-[0_0_10px_rgba(168,85,247,0.3)] transition-all"
-                >
-                  <Icon className="w-4 h-4" />
-                </a>
-              ))}
+              {(socialLinks ?? [])
+                .filter((link) => link.active)
+                .map((link) => {
+                  const Icon = SOCIAL_ICONS[link.platform];
+                  return (
+                    <a
+                      key={link.platform}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Visit PD Stores on ${link.platform}`}
+                      className="w-9 h-9 rounded-sm border border-border/50 flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 hover:shadow-[0_0_10px_rgba(168,85,247,0.3)] transition-all"
+                    >
+                      <Icon className="w-4 h-4" />
+                    </a>
+                  );
+                })}
             </div>
           </div>
 
