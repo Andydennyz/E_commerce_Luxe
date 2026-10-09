@@ -1,8 +1,22 @@
 import { motion, useScroll, useTransform } from "motion/react";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Sparkles } from "lucide-react";
 import NeonButton from "@/components/neon-button.tsx";
+
+function getISOWeek(date: Date) {
+  const thursday = new Date(
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+  );
+  thursday.setUTCDate(
+    thursday.getUTCDate() + 3 - ((thursday.getUTCDay() + 6) % 7),
+  );
+
+  const firstThursday = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 4));
+  return (
+    1 + Math.round((thursday.getTime() - firstThursday.getTime()) / 604_800_000)
+  );
+}
 
 const heroImages = [
   "https://images.unsplash.com/photo-1777146536285-e70e21c953eb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080",
@@ -21,9 +35,15 @@ const PARTICLES = Array.from({ length: 16 }, (_, i) => ({
 
 export default function HeroSection() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const { scrollY } = useScroll();
   const y = useTransform(scrollY, [0, 600], [0, 180]);
   const opacity = useTransform(scrollY, [0, 400], [1, 0]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <section ref={containerRef} className="relative min-h-screen flex items-center overflow-hidden">
@@ -75,9 +95,24 @@ export default function HeroSection() {
           >
             <Sparkles className="w-4 h-4 text-primary" />
             <span className="text-xs uppercase tracking-[0.3em] text-primary font-semibold">
-              New Collection 2025
+              New Collection {currentTime.getFullYear()}
             </span>
           </motion.div>
+          <time
+            dateTime={currentTime.toISOString()}
+            className="block -mt-4 mb-6 text-xs uppercase tracking-widest text-muted-foreground"
+          >
+            {currentTime.toLocaleDateString(undefined, { month: "long" })} ·{" "}
+            Week {getISOWeek(currentTime)} ·{" "}
+            {currentTime.toLocaleDateString(undefined, { weekday: "long" })}{" "}
+            {currentTime.getDate()}{" "}
+            ·{" "}
+            {currentTime.toLocaleTimeString(undefined, {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}
+          </time>
 
           <motion.h1
             initial={{ opacity: 0, y: 40 }}
